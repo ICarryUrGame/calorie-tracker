@@ -430,7 +430,7 @@ const AppStorage = (() => {
   }
 
   async function addWeightRecord(weight) {
-    const records = [..._state.weightHistory];
+    const records = [...(_state.weightHistory || [])];
     const dateStr = _dateKey(new Date());
     const timeStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
 
@@ -443,11 +443,16 @@ const AppStorage = (() => {
 
     records.push(newRecord);
 
-    // Sort by date descending, then time descending
+    // Sort by date descending, then time descending safely (handling legacy records without 'time')
     records.sort((a, b) => {
-      const dateCompare = b.date.localeCompare(a.date);
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      const dateCompare = dateB.localeCompare(dateA);
       if (dateCompare !== 0) return dateCompare;
-      return b.time.localeCompare(a.time);
+      
+      const timeA = a.time || '';
+      const timeB = b.time || '';
+      return timeB.localeCompare(timeA);
     });
 
     // Also update main weight in profile
@@ -466,7 +471,7 @@ const AppStorage = (() => {
   }
 
   async function deleteWeightRecord(recordId) {
-    const records = _state.weightHistory.filter(r => r.id !== recordId);
+    const records = (_state.weightHistory || []).filter(r => r.id !== recordId);
     await syncUserData({ weightHistory: records });
   }
 
