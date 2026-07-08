@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="CalorieAI — Licznik kalorii z bazą produktów i AI">
+  <meta name="theme-color" content="#06060c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>CalorieAI — Inteligentny Licznik Kalorii</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Global Loading Screen -->
+  <div id="loading-screen" class="hidden" style="position:fixed; inset:0; background:var(--bg-primary); z-index:1000; display:flex; align-items:center; justify-content:center; flex-direction:column;">
+    <div class="loading">
+      <div class="loading__spinner"></div>
+      <div class="loading__text" id="loading-text">Wczytywanie Twoich danych...</div>
+    </div>
+  </div>
+
+  <!-- ========== AUTH SCREEN (LOGIN & REGISTER) ========== -->
+  <div id="auth-screen" class="view active">
+    <div class="auth-container">
+      <div class="glass-card auth-card glass-card--no-hover">
+        <div class="auth-header">
+          <div class="auth-logo">
+            <i data-lucide="flame" style="width: 36px; height: 36px; color: var(--accent-green)"></i>
+          </div>
+          <h1 class="auth-title" id="auth-title">Zaloguj się</h1>
+          <p class="auth-subtitle" id="auth-subtitle">Wpisz swoje dane, aby uzyskać dostęp do licznika kalorii i synchronizacji danych.</p>
+        </div>
+
+        <form id="auth-form" class="auth-form">
+          <div class="input-group">
+            <label for="auth-username">Nazwa użytkownika</label>
+            <input type="text" id="auth-username" class="input" placeholder="np. jan123" required minlength="3" autocomplete="username">
+          </div>
+
+          <div class="input-group">
+            <label for="auth-password">Hasło</label>
+            <input type="password" id="auth-password" class="input" placeholder="••••••••" required minlength="4" autocomplete="current-password">
+          </div>
+
+          <!-- Goal input - only visible during registration -->
+          <div class="input-group hidden" id="register-goal-group">
+            <label for="auth-goal">Dzienny cel kaloryczny (kcal)</label>
+            <input type="number" id="auth-goal" class="input" value="2000" min="500" max="10000" step="50">
+          </div>
+
+          <button type="submit" class="btn btn--primary btn--full mt-16" id="auth-submit-btn">
+            <i data-lucide="key-round"></i>
+            <span id="auth-submit-text">Zaloguj się</span>
+          </button>
+        </form>
+
+        <div class="auth-switch">
+          <span id="auth-switch-text">Nie masz jeszcze konta?</span>
+          <button class="auth-switch-btn" id="auth-switch-btn">Zarejestruj się</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== MAIN APP V2 ========== -->
+  <div id="main-app" class="hidden">
+    <div id="app">
+
+      <!-- === DASHBOARD VIEW === -->
+      <div id="view-dashboard" class="view">
+        <!-- Header -->
+        <div class="header">
+          <div class="header__title">
+            <div class="header__logo" style="background:none; box-shadow:none; width:auto; height:auto;">
+              <i data-lucide="flame" style="width: 32px; height: 32px; color: var(--accent-green); filter: drop-shadow(0 0 8px rgba(0,240,118,0.4))"></i>
+            </div>
+            <h2 style="font-size:1.45rem; font-weight:900; letter-spacing:-0.03em;">Calorie<span style="color:var(--accent-green)">AI</span></h2>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px">
+            <span class="header__username" id="display-username">Gość</span>
+            <button class="btn btn--secondary btn--sm" id="btn-logout" style="padding: 8px 14px; font-size: 0.8rem; border-radius: var(--radius-sm)">
+              <i data-lucide="log-out" style="width:14px; height:14px"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Date Navigation -->
+        <div class="date-nav">
+          <button class="date-nav__btn" id="date-prev" aria-label="Poprzedni dzień">
+            <i data-lucide="chevron-left" style="width:20px; height:20px"></i>
+          </button>
+          <div style="text-align:center">
+            <div class="date-nav__label" id="date-label">—</div>
+            <div class="date-nav__today" id="date-today">Dzisiaj</div>
+          </div>
+          <button class="date-nav__btn" id="date-next" aria-label="Następny dzień">
+            <i data-lucide="chevron-right" style="width:20px; height:20px"></i>
+          </button>
+        </div>
+
+        <!-- Calorie Ring -->
+        <div class="calorie-ring">
+          <svg class="calorie-ring__svg" viewBox="0 0 180 180">
+            <defs>
+              <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00f076"/>
+                <stop offset="100%" stop-color="#00f0ff"/>
+              </linearGradient>
+            </defs>
+            <circle class="calorie-ring__bg" cx="90" cy="90" r="80"/>
+            <circle class="calorie-ring__progress" id="ring-progress" cx="90" cy="90" r="80"/>
+          </svg>
+          <div class="calorie-ring__center">
+            <div class="calorie-ring__value" id="ring-value">0</div>
+            <div class="calorie-ring__label">kcal spożyte</div>
+            <div class="calorie-ring__remaining calorie-ring__remaining--under" id="ring-remaining">—</div>
+          </div>
+        </div>
+
+        <!-- Macro Bars -->
+        <div class="macro-bars">
+          <div class="macro-bar">
+            <div class="macro-bar__icon">
+              <i data-lucide="beef" style="color:var(--accent-blue); width: 22px; height: 22px; margin: 0 auto"></i>
+            </div>
+            <div class="macro-bar__label">Białko</div>
+            <div class="macro-bar__value" id="macro-protein-value">0</div>
+            <div class="macro-bar__goal" id="macro-protein-goal">/ 0 g</div>
+            <div class="macro-bar__track">
+              <div class="macro-bar__fill macro-bar__fill--protein" id="macro-protein-fill" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="macro-bar">
+            <div class="macro-bar__icon">
+              <i data-lucide="wheat" style="color:var(--accent-orange); width: 22px; height: 22px; margin: 0 auto"></i>
+            </div>
+            <div class="macro-bar__label">Węgle</div>
+            <div class="macro-bar__value" id="macro-carbs-value">0</div>
+            <div class="macro-bar__goal" id="macro-carbs-goal">/ 0 g</div>
+            <div class="macro-bar__track">
+              <div class="macro-bar__fill macro-bar__fill--carbs" id="macro-carbs-fill" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="macro-bar">
+            <div class="macro-bar__icon">
+              <i data-lucide="droplets" style="color:var(--accent-yellow); width: 22px; height: 22px; margin: 0 auto"></i>
+            </div>
+            <div class="macro-bar__label">Tłuszcze</div>
+            <div class="macro-bar__value" id="macro-fat-value">0</div>
+            <div class="macro-bar__goal" id="macro-fat-goal">/ 0 g</div>
+            <div class="macro-bar__track">
+              <div class="macro-bar__fill macro-bar__fill--fat" id="macro-fat-fill" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button class="action-btn" id="btn-add-text">
+            <div class="action-btn__icon action-btn__icon--text">
+              <i data-lucide="text-cursor" style="width: 24px; height: 24px"></i>
+            </div>
+            <span>Dodaj opis</span>
+          </button>
+          <button class="action-btn" id="btn-add-photo">
+            <div class="action-btn__icon action-btn__icon--photo">
+              <i data-lucide="camera" style="width: 24px; height: 24px"></i>
+            </div>
+            <span>Zrób zdjęcie</span>
+          </button>
+          <button class="action-btn" id="btn-add-manual">
+            <div class="action-btn__icon action-btn__icon--manual">
+              <i data-lucide="pen-tool" style="width: 24px; height: 24px"></i>
+            </div>
+            <span>Ręcznie</span>
+          </button>
+        </div>
+
+        <!-- Meals List -->
+        <div class="meals-section">
+          <div class="meals-section__header">
+            <h3 class="meals-section__title">Zjedzone posiłki</h3>
+            <span class="meals-section__count" id="meals-count">0 posiłków</span>
+          </div>
+          <div id="meals-list">
+            <div class="meals-empty">
+              <div class="meals-empty__icon">
+                <i data-lucide="utensils" style="width:48px; height:48px; margin:0 auto; opacity: 0.35"></i>
+              </div>
+              <div class="meals-empty__text" style="margin-top:12px">Brak posiłków na ten dzień</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- === HISTORY VIEW === -->
+      <div id="view-history" class="view">
+        <div class="header">
+          <div class="header__title">
+            <i data-lucide="calendar" style="color:var(--accent-green); width: 28px; height: 28px"></i>
+            <h1 style="font-size:1.5rem; margin-left: 8px">Historia spożycia</h1>
+          </div>
+        </div>
+        <div id="history-list" class="history-list"></div>
+      </div>
+
+      <!-- === SETTINGS VIEW === -->
+      <div id="view-settings" class="view">
+        <div class="header">
+          <div class="header__title">
+            <i data-lucide="sliders" style="color:var(--accent-green); width: 28px; height: 28px"></i>
+            <h1 style="font-size:1.5rem; margin-left: 8px">Ustawienia profilu</h1>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">Dzienne cele makro</div>
+
+          <div class="settings-item">
+            <span class="settings-item__label">
+              <i data-lucide="target" style="width:16px; height:16px; color:var(--accent-cyan); vertical-align:middle; margin-right:8px"></i>
+              Cel kaloryczny
+            </span>
+            <div class="settings-item__value">
+              <input type="number" id="setting-calorie-goal" class="settings-item__input" min="500" max="10000" step="50">
+              <span class="settings-item__unit">kcal</span>
+            </div>
+          </div>
+
+          <div class="settings-item">
+            <span class="settings-item__label">
+              <i data-lucide="egg" style="width:16px; height:16px; color:var(--accent-blue); vertical-align:middle; margin-right:8px"></i>
+              Białko
+            </span>
+            <div class="settings-item__value">
+              <input type="number" id="setting-protein" class="settings-item__input" min="0" max="500" step="5">
+              <span class="settings-item__unit">g</span>
+            </div>
+          </div>
+
+          <div class="settings-item">
+            <span class="settings-item__label">
+              <i data-lucide="wheat" style="width:16px; height:16px; color:var(--accent-orange); vertical-align:middle; margin-right:8px"></i>
+              Węglowodany
+            </span>
+            <div class="settings-item__value">
+              <input type="number" id="setting-carbs" class="settings-item__input" min="0" max="600" step="5">
+              <span class="settings-item__unit">g</span>
+            </div>
+          </div>
+
+          <div class="settings-item">
+            <span class="settings-item__label">
+              <i data-lucide="droplet" style="width:16px; height:16px; color:var(--accent-yellow); vertical-align:middle; margin-right:8px"></i>
+              Tłuszcze
+            </span>
+            <div class="settings-item__value">
+              <input type="number" id="setting-fat" class="settings-item__input" min="0" max="300" step="5">
+              <span class="settings-item__unit">g</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">Klucz AI (Opcjonalny)</div>
+          <div class="settings-item">
+            <span class="settings-item__label">
+              <i data-lucide="key-round" style="width:16px; height:16px; color:var(--accent-purple); vertical-align:middle; margin-right:8px"></i>
+              Gemini API Key
+            </span>
+            <div class="settings-item__value">
+              <input type="password" id="setting-api-key" class="settings-item__input" style="width:160px" data-masked="true">
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">Sesja i dane</div>
+          <button class="btn btn--danger btn--full" id="btn-clear-data">
+            <i data-lucide="trash-2"></i>
+            <span>Usuń konto i dane</span>
+          </button>
+        </div>
+
+        <div class="text-center mt-16">
+          <p class="text-xs text-muted">CalorieAI v2.1 — Twoje dane są zapisane bezpiecznie w bazie</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========== BOTTOM NAVIGATION ========== -->
+  <nav class="bottom-nav hidden">
+    <div class="bottom-nav__inner">
+      <button class="bottom-nav__item active" data-view="view-dashboard">
+        <span class="bottom-nav__icon">
+          <i data-lucide="home" style="width: 20px; height: 20px"></i>
+        </span>
+        <span>Główna</span>
+      </button>
+      <button class="bottom-nav__item" data-view="view-history">
+        <span class="bottom-nav__icon">
+          <i data-lucide="calendar" style="width: 20px; height: 20px"></i>
+        </span>
+        <span>Historia</span>
+      </button>
+      <button class="bottom-nav__item" data-view="view-settings">
+        <span class="bottom-nav__icon">
+          <i data-lucide="sliders" style="width: 20px; height: 20px"></i>
+        </span>
+        <span>Ustawienia</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ========== TEXT SEARCH / ANALYSIS MODAL ========== -->
+  <div id="text-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal__handle"></div>
+      <div class="modal__header">
+        <h2 class="modal__title">✏️ Szukaj z bazy / AI</h2>
+        <button class="modal__close" id="text-modal-close">
+          <i data-lucide="x" style="width:18px; height:18px"></i>
+        </button>
+      </div>
+
+      <div class="input-group mb-16">
+        <label for="meal-text-input">Co dzisiaj zjadłeś/aś?</label>
+        <textarea id="meal-text-input" class="input" placeholder="np. 2 jajka sadzone, chleb razowy..." rows="3"></textarea>
+      </div>
+
+      <button class="btn btn--primary btn--full mb-16" id="text-analyze-btn">
+        <i data-lucide="search"></i>
+        <span>Szukaj / Analizuj</span>
+      </button>
+
+      <div id="text-result-area"></div>
+
+      <button class="btn btn--primary btn--full mt-16 hidden" id="text-save-btn">
+        <i data-lucide="check"></i>
+        <span>Zapisz posiłek</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== PHOTO ANALYSIS MODAL ========== -->
+  <div id="photo-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal__handle"></div>
+      <div class="modal__header">
+        <h2 class="modal__title">📷 Zdjęcie posiłku</h2>
+        <button class="modal__close" id="photo-modal-close">
+          <i data-lucide="x" style="width:18px; height:18px"></i>
+        </button>
+      </div>
+
+      <!-- Camera Section -->
+      <div id="camera-section">
+        <div id="camera-start-section">
+          <div class="upload-area" id="upload-area">
+            <div class="upload-area__icon">
+              <i data-lucide="image-plus" style="width: 44px; height: 44px; margin: 0 auto; color: var(--text-secondary)"></i>
+            </div>
+            <div class="upload-area__text" style="margin-top:12px">Przeciągnij zdjęcie tutaj</div>
+            <div class="upload-area__hint">lub kliknij aby wybrać z galerii</div>
+          </div>
+          <input type="file" id="file-input" accept="image/*" capture="environment" class="hidden">
+
+          <div class="text-center mb-16">
+            <span class="text-muted text-sm">— lub użyj kamery —</span>
+          </div>
+
+          <button class="btn btn--purple btn--full" id="btn-start-camera">
+            <i data-lucide="video"></i>
+            <span>Uruchom aparat</span>
+          </button>
+        </div>
+
+        <div id="camera-live-section" class="hidden">
+          <div class="camera-container">
+            <video id="camera-video" autoplay playsinline muted></video>
+          </div>
+          <div class="camera-controls">
+            <button class="camera-btn" id="btn-capture" aria-label="Zrób zdjęcie">
+              <i data-lucide="aperture" style="width:32px; height:32px"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Captured Photo View -->
+      <div id="captured-section" class="hidden">
+        <div id="photo-preview-area" class="mb-16"></div>
+
+        <div style="display:flex; gap:10px; margin-bottom:16px">
+          <button class="btn btn--secondary btn--full" id="photo-retake-btn">
+            <i data-lucide="refresh-cw"></i>
+            <span>Inne zdjęcie</span>
+          </button>
+          <button class="btn btn--primary btn--full" id="photo-analyze-btn">
+            <i data-lucide="sparkles"></i>
+            <span>Analizuj AI</span>
+          </button>
+        </div>
+
+        <div id="photo-result-area"></div>
+
+        <button class="btn btn--primary btn--full mt-16 hidden" id="photo-save-btn">
+          <i data-lucide="check"></i>
+          <span>Zapisz posiłek</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== MANUAL ENTRY MODAL ========== -->
+  <div id="manual-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal__handle"></div>
+      <div class="modal__header">
+        <h2 class="modal__title">✍️ Dodaj ręcznie</h2>
+        <button class="modal__close" id="manual-modal-close">
+          <i data-lucide="x" style="width:18px; height:18px"></i>
+        </button>
+      </div>
+
+      <div class="input-group mb-12">
+        <label for="manual-name">Nazwa produktu / posiłku</label>
+        <input type="text" id="manual-name" class="input" placeholder="np. Obiad domowy, banan">
+      </div>
+
+      <div class="input-group mb-12">
+        <label for="manual-calories">Kalorie (kcal)</label>
+        <input type="number" id="manual-calories" class="input" placeholder="np. 450" min="0" step="10">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px" class="mb-24">
+        <div class="input-group">
+          <label for="manual-protein">🥩 Białko (g)</label>
+          <input type="number" id="manual-protein" class="input" placeholder="0" min="0">
+        </div>
+        <div class="input-group">
+          <label for="manual-carbs">🍞 Węgle (g)</label>
+          <input type="number" id="manual-carbs" class="input" placeholder="0" min="0">
+        </div>
+        <div class="input-group">
+          <label for="manual-fat">🧈 Tłuszcz (g)</label>
+          <input type="number" id="manual-fat" class="input" placeholder="0" min="0">
+        </div>
+      </div>
+
+      <button class="btn btn--primary btn--full" id="manual-save-btn">
+        <i data-lucide="check"></i>
+        <span>Zapisz posiłek</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/storage.js?v=6"></script>
+  <script src="js/fooddb.js?v=6"></script>
+  <script src="js/ai.js?v=6"></script>
+  <script src="js/camera.js?v=6"></script>
+  <script src="js/ui.js?v=6"></script>
+  <script src="js/app.js?v=6"></script>
+</body>
+</html>
