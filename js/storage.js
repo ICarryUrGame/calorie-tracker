@@ -31,7 +31,7 @@ const AppStorage = (() => {
 
   // --- Auth API ---
   async function register(username, password, initialGoal = 2000) {
-    username = username.trim().lower();
+    username = username.trim().toLowerCase();
     password = password.trim();
 
     if (username.length < 3 || password.length < 4) {
@@ -91,7 +91,7 @@ const AppStorage = (() => {
   }
 
   async function login(username, password) {
-    username = username.trim().lower();
+    username = username.trim().toLowerCase();
     password = password.trim();
 
     if (_isLocalMode) {
