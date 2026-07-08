@@ -181,7 +181,7 @@ const FoodDB = (() => {
     ["granola", 220, 5, 32, 8, "1 porcja (50g)"],
     ["owsianka na mleku", 250, 10, 38, 6, "1 miska"],
     ["owsianka na wodzie", 150, 5, 27, 3, "1 miska"],
-    ["kanapka z szynką", 200, 10, 25, 6, "1 szt"],
+    ["kanapka z szynką", 320, 14, 38, 12, "1 szt"],
     ["kanapka z serem", 220, 10, 25, 9, "1 szt"],
     ["kanapka z masłem orzechowym", 280, 8, 28, 15, "1 szt"],
     ["tost z jajkiem", 190, 10, 15, 10, "1 szt"],

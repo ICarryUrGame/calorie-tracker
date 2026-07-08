@@ -1,5 +1,5 @@
 // ============================================
-// CALORIE TRACKER — Storage Module (Hybrid API & Local Mode)
+// CALORIE TRACKER — Storage Module (Hybrid API & Local Mode V2)
 // Detects file:// or http:// and syncs data to server OR local storage database
 // ============================================
 
@@ -24,13 +24,49 @@ const AppStorage = (() => {
     apiKey: '',
     dailyGoal: 2000,
     macroGoals: { protein: 150, carbs: 250, fat: 70 },
+    profile: { weight: 0, height: 0, targetWeight: 0 },
+    weightHistory: [], // Array of { date, weight }
+    favorites: [], // Array of { id, name, calories, protein, carbs, fat }
     meals: {} // Date -> Array of meals
   };
 
   console.log(`[Storage] Uruchomiono w trybie: ${_isLocalMode ? 'LOKALNYM (file://)' : 'SERWEROWYM (http://)'}`);
 
+  // --- BMR Calorie Calculator ---
+  function calculateGoals(weight, height, targetWeight) {
+    // Mifflin-St Jeor formula (assuming age 25 for general estimate)
+    // BMR = 10*weight + 6.25*height - 5*25 - 5
+    let calories = Math.round(10 * weight + 6.25 * height - 130);
+    
+    // Activity factor multiplier (assumed moderate: 1.35)
+    calories = Math.round(calories * 1.35);
+
+    // Adjust based on expected target weight
+    if (targetWeight < weight) {
+      calories -= 400; // Deficit
+    } else if (targetWeight > weight) {
+      calories += 300; // Surplus
+    }
+    
+    // Ensure logical floor
+    calories = Math.max(1200, calories);
+
+    // Macros:
+    // Protein: 1.8g per kg
+    const protein = Math.round(1.8 * weight);
+    // Fat: 1.0g per kg
+    const fat = Math.round(1.0 * weight);
+    // Carbs: rest of calories
+    const carbs = Math.max(50, Math.round((calories - (protein * 4) - (fat * 9)) / 4));
+
+    return {
+      dailyGoal: calories,
+      macroGoals: { protein, carbs, fat }
+    };
+  }
+
   // --- Auth API ---
-  async function register(username, password, initialGoal = 2000) {
+  async function register(username, password, profileData = null) {
     username = username.trim().toLowerCase();
     password = password.trim();
 
@@ -38,22 +74,47 @@ const AppStorage = (() => {
       throw new Error('Nazwa użytkownika musi mieć min. 3 znaki, a hasło min. 4 znaki.');
     }
 
+    // Determine initial targets
+    let dailyGoal = 2000;
+    let macroGoals = { protein: 150, carbs: 250, fat: 70 };
+    let profile = { weight: 0, height: 0, targetWeight: 0 };
+    let weightHistory = [];
+
+    if (profileData && profileData.weight && profileData.height) {
+      profile = {
+        weight: parseFloat(profileData.weight) || 0,
+        height: parseFloat(profileData.height) || 0,
+        targetWeight: parseFloat(profileData.targetWeight) || 0
+      };
+      
+      const calculated = calculateGoals(profile.weight, profile.height, profile.targetWeight);
+      dailyGoal = calculated.dailyGoal;
+      macroGoals = calculated.macroGoals;
+
+      // Add first record to history
+      weightHistory.push({
+        date: _dateKey(new Date()),
+        weight: profile.weight
+      });
+    }
+
     if (_isLocalMode) {
-      // --- Local database in localStorage ---
       const users = _getLocalUsers();
       if (users[username]) {
         throw new Error('Użytkownik o takiej nazwie już istnieje.');
       }
 
-      // Simple secure hash simulation for offline safety
       const passwordHash = _simpleHash(password);
       
       users[username] = {
         username: username,
         passwordHash: passwordHash,
-        dailyGoal: initialGoal,
-        macroGoals: { protein: Math.round(initialGoal * 0.3 / 4), carbs: Math.round(initialGoal * 0.45 / 4), fat: Math.round(initialGoal * 0.25 / 9) },
+        dailyGoal: dailyGoal,
+        macroGoals: macroGoals,
         apiKey: '',
+        profile: profile,
+        weightHistory: weightHistory,
+        favorites: [],
         meals: {}
       };
 
@@ -62,7 +123,6 @@ const AppStorage = (() => {
       await fetchUserData();
       return { success: true };
     } else {
-      // --- Server API ---
       try {
         const res = await fetch(`${API_URL}/api/register`, {
           method: 'POST',
@@ -75,16 +135,18 @@ const AppStorage = (() => {
 
         _setSession(data.token, data.user.username);
         
+        // Sync calculated goals and profile info to SQL server
         await syncUserData({
-          dailyGoal: initialGoal,
-          macroGoals: { protein: Math.round(initialGoal * 0.3 / 4), carbs: Math.round(initialGoal * 0.45 / 4), fat: Math.round(initialGoal * 0.25 / 9) }
+          dailyGoal,
+          macroGoals,
+          profile,
+          weightHistory
         });
 
         await fetchUserData();
         return { success: true };
       } catch (e) {
-        // Fallback to local mode if server is down
-        console.warn('Server registration failed, switching to local database fallback...', e.message);
+        console.warn('Server registration failed, offline mode not connected', e.message);
         throw e;
       }
     }
@@ -130,6 +192,9 @@ const AppStorage = (() => {
     _state.username = null;
     _state.meals = {};
     _state.apiKey = '';
+    _state.profile = { weight: 0, height: 0, targetWeight: 0 };
+    _state.weightHistory = [];
+    _state.favorites = [];
     localStorage.removeItem('ct_token');
     localStorage.removeItem('ct_username');
   }
@@ -155,13 +220,15 @@ const AppStorage = (() => {
     if (!isAuthenticated()) return;
 
     if (_isLocalMode || _state.token.startsWith('local:')) {
-      // Load from local localStorage database
       const users = _getLocalUsers();
       const user = users[_state.username];
       if (user) {
         _state.dailyGoal = user.dailyGoal || 2000;
         _state.macroGoals = user.macroGoals || { protein: 150, carbs: 250, fat: 70 };
         _state.apiKey = user.apiKey || '';
+        _state.profile = user.profile || { weight: 0, height: 0, targetWeight: 0 };
+        _state.weightHistory = user.weightHistory || [];
+        _state.favorites = user.favorites || [];
         _state.meals = user.meals || {};
       }
     } else {
@@ -181,6 +248,9 @@ const AppStorage = (() => {
         _state.dailyGoal = data.dailyGoal || 2000;
         _state.macroGoals = data.macroGoals || { protein: 150, carbs: 250, fat: 70 };
         _state.apiKey = data.apiKey || '';
+        _state.profile = data.profile || { weight: 0, height: 0, targetWeight: 0 };
+        _state.weightHistory = data.weightHistory || [];
+        _state.favorites = data.favorites || [];
         _state.meals = data.meals || {};
       } catch (e) {
         console.error('Fetch error:', e);
@@ -199,6 +269,9 @@ const AppStorage = (() => {
         if (updates.dailyGoal !== undefined) user.dailyGoal = updates.dailyGoal;
         if (updates.macroGoals !== undefined) user.macroGoals = updates.macroGoals;
         if (updates.apiKey !== undefined) user.apiKey = updates.apiKey;
+        if (updates.profile !== undefined) user.profile = updates.profile;
+        if (updates.weightHistory !== undefined) user.weightHistory = updates.weightHistory;
+        if (updates.favorites !== undefined) user.favorites = updates.favorites;
         
         users[_state.username] = user;
         _saveLocalUsers(users);
@@ -208,6 +281,9 @@ const AppStorage = (() => {
       if (updates.dailyGoal !== undefined) _state.dailyGoal = updates.dailyGoal;
       if (updates.macroGoals !== undefined) _state.macroGoals = updates.macroGoals;
       if (updates.apiKey !== undefined) _state.apiKey = updates.apiKey;
+      if (updates.profile !== undefined) _state.profile = updates.profile;
+      if (updates.weightHistory !== undefined) _state.weightHistory = updates.weightHistory;
+      if (updates.favorites !== undefined) _state.favorites = updates.favorites;
     } else {
       try {
         const res = await fetch(`${API_URL}/api/sync-data`, {
@@ -224,6 +300,9 @@ const AppStorage = (() => {
         if (updates.dailyGoal !== undefined) _state.dailyGoal = updates.dailyGoal;
         if (updates.macroGoals !== undefined) _state.macroGoals = updates.macroGoals;
         if (updates.apiKey !== undefined) _state.apiKey = updates.apiKey;
+        if (updates.profile !== undefined) _state.profile = updates.profile;
+        if (updates.weightHistory !== undefined) _state.weightHistory = updates.weightHistory;
+        if (updates.favorites !== undefined) _state.favorites = updates.favorites;
       } catch (e) {
         console.error('Sync error:', e);
         throw e;
@@ -257,7 +336,6 @@ const AppStorage = (() => {
         users[_state.username] = user;
         _saveLocalUsers(users);
         
-        // Update local state cache
         if (!_state.meals[dateKey]) _state.meals[dateKey] = [];
         _state.meals[dateKey].push(meal);
       }
@@ -301,7 +379,6 @@ const AppStorage = (() => {
         _saveLocalUsers(users);
       }
 
-      // Update state cache
       if (_state.meals[dateKey]) {
         _state.meals[dateKey] = _state.meals[dateKey].filter(m => m.id !== mealId);
         if (_state.meals[dateKey].length === 0) delete _state.meals[dateKey];
@@ -324,6 +401,102 @@ const AppStorage = (() => {
         throw e;
       }
     }
+  }
+
+  // --- Profile, Weight, and Favorites CRUD ---
+  function getProfile() {
+    return _state.profile || { weight: 0, height: 0, targetWeight: 0 };
+  }
+
+  async function updateProfile(weight, height, targetWeight) {
+    const updated = {
+      weight: parseFloat(weight) || 0,
+      height: parseFloat(height) || 0,
+      targetWeight: parseFloat(targetWeight) || 0
+    };
+
+    // Recalculate calorie goals based on updated profile
+    const calculated = calculateGoals(updated.weight, updated.height, updated.targetWeight);
+    
+    await syncUserData({
+      profile: updated,
+      dailyGoal: calculated.dailyGoal,
+      macroGoals: calculated.macroGoals
+    });
+  }
+
+  function getWeightHistory() {
+    return _state.weightHistory || [];
+  }
+
+  async function addWeightRecord(weight) {
+    const records = [..._state.weightHistory];
+    const dateStr = _dateKey(new Date());
+    const timeStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+
+    const newRecord = {
+      id: 'w_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+      date: dateStr,
+      time: timeStr,
+      weight: parseFloat(weight) || 0
+    };
+
+    records.push(newRecord);
+
+    // Sort by date descending, then time descending
+    records.sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      return b.time.localeCompare(a.time);
+    });
+
+    // Also update main weight in profile
+    const profile = { ..._state.profile };
+    profile.weight = parseFloat(weight) || 0;
+
+    // Recalculate goals for current weight
+    const calculated = calculateGoals(profile.weight, profile.height, profile.targetWeight);
+
+    await syncUserData({
+      weightHistory: records,
+      profile: profile,
+      dailyGoal: calculated.dailyGoal,
+      macroGoals: calculated.macroGoals
+    });
+  }
+
+  async function deleteWeightRecord(recordId) {
+    const records = _state.weightHistory.filter(r => r.id !== recordId);
+    await syncUserData({ weightHistory: records });
+  }
+
+  function getFavorites() {
+    return _state.favorites || [];
+  }
+
+  async function addFavorite(item) {
+    const favorites = [..._state.favorites];
+    
+    // Check duplicates
+    if (favorites.some(f => f.name.toLowerCase() === item.name.toLowerCase())) {
+      throw new Error('Ten posiłek jest już w Twoich ulubionych.');
+    }
+
+    favorites.push({
+      id: 'fav_' + Date.now().toString(36),
+      name: item.name,
+      calories: Math.round(item.calories) || 0,
+      protein: Math.round(item.protein) || 0,
+      carbs: Math.round(item.carbs) || 0,
+      fat: Math.round(item.fat) || 0
+    });
+
+    await syncUserData({ favorites });
+  }
+
+  async function deleteFavorite(favId) {
+    const favorites = _state.favorites.filter(f => f.id !== favId);
+    await syncUserData({ favorites });
   }
 
   // --- Getters & Setters ---
@@ -399,7 +572,6 @@ const AppStorage = (() => {
   }
 
   function _simpleHash(str) {
-    // Basic browser-side string hashing for local database separation
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       hash = (hash << 5) - hash + str.charCodeAt(i);
@@ -434,6 +606,14 @@ const AppStorage = (() => {
     addMeal,
     deleteMeal,
     getAllDatesWithMeals,
-    deleteAccount
+    deleteAccount,
+    getProfile,
+    updateProfile,
+    getWeightHistory,
+    addWeightRecord,
+    deleteWeightRecord,
+    getFavorites,
+    addFavorite,
+    deleteFavorite
   };
 })();

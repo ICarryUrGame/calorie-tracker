@@ -1,14 +1,15 @@
 // ============================================
-// CALORIE TRACKER — App Module
+// CALORIE TRACKER — App Module (Upgraded V3 - Portion Selector & Calendar)
 // Main application logic, routing, auth flows, initialization
 // ============================================
 
 const App = (() => {
   let _currentDate = new Date();
   let _currentAIResult = null;
-  let _cameraActive = false;
-  let _photoDataUrl = null;
   let _isRegisterMode = false;
+  
+  let _selectedFavForAdd = null;
+  let _selectedSearchMatchForAdd = null;
 
   // --- Initialization ---
   async function init() {
@@ -54,7 +55,9 @@ const App = (() => {
   function _resetAuthForm() {
     document.getElementById('auth-username').value = '';
     document.getElementById('auth-password').value = '';
-    document.getElementById('auth-goal').value = '2000';
+    document.getElementById('auth-weight').value = '';
+    document.getElementById('auth-height').value = '';
+    document.getElementById('auth-target-weight').value = '';
     _setRegisterMode(false);
   }
 
@@ -62,22 +65,22 @@ const App = (() => {
     _isRegisterMode = isRegister;
     const title = document.getElementById('auth-title');
     const subtitle = document.getElementById('auth-subtitle');
-    const submitBtn = document.getElementById('auth-submit-btn');
     const switchText = document.getElementById('auth-switch-text');
     const switchBtn = document.getElementById('auth-switch-btn');
     const registerGoalGroup = document.getElementById('register-goal-group');
+    const submitText = document.getElementById('auth-submit-text');
 
     if (isRegister) {
       title.textContent = 'Stwórz konto';
-      subtitle.textContent = 'Zarejestruj się, aby zapisywać posiłki i kontrolować kalorie z każdego urządzenia.';
-      submitBtn.textContent = '🚀 Zarejestruj się';
+      subtitle.textContent = 'Zarejestruj się, aby obliczyć optymalne cele i zapisywać posiłki.';
+      if (submitText) submitText.textContent = 'Zarejestruj się';
       switchText.textContent = 'Masz już konto?';
       switchBtn.textContent = 'Zaloguj się';
       registerGoalGroup.classList.remove('hidden');
     } else {
       title.textContent = 'Zaloguj się';
-      subtitle.textContent = 'Wpisz swoje dane, aby uzyskać dostęp do licznika kalorii i synchronizacji danych.';
-      submitBtn.textContent = '🔑 Zaloguj się';
+      subtitle.textContent = 'Wpisz swoje dane, aby uzyskać dostęp do licznika kalorii i kalkulatora.';
+      if (submitText) submitText.textContent = 'Zaloguj się';
       switchText.textContent = 'Nie masz jeszcze konta?';
       switchBtn.textContent = 'Zarejestruj się';
       registerGoalGroup.classList.add('hidden');
@@ -94,16 +97,23 @@ const App = (() => {
         e.preventDefault();
         const username = document.getElementById('auth-username').value.trim();
         const password = document.getElementById('auth-password').value.trim();
-        const goal = parseInt(document.getElementById('auth-goal').value) || 2000;
 
         const submitBtn = document.getElementById('auth-submit-btn');
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Proszę czekać...';
-
+        
         try {
           if (_isRegisterMode) {
-            await AppStorage.register(username, password, goal);
-            UI.showToast('Konto zostało pomyślnie utworzone! 🎉', 'success');
+            const weight = parseFloat(document.getElementById('auth-weight').value) || 0;
+            const height = parseInt(document.getElementById('auth-height').value) || 0;
+            const targetWeight = parseFloat(document.getElementById('auth-target-weight').value) || weight;
+
+            if (weight <= 30 || height <= 100) {
+              throw new Error('Proszę podać poprawną wagę i wzrost do kalkulatora.');
+            }
+
+            const profileData = { weight, height, targetWeight };
+            await AppStorage.register(username, password, profileData);
+            UI.showToast('Konto utworzone i zapotrzebowanie wyliczone! 🎉', 'success');
           } else {
             await AppStorage.login(username, password);
             UI.showToast('Zalogowano pomyślnie!', 'success');
@@ -113,7 +123,6 @@ const App = (() => {
           UI.showToast(error.message, 'error');
         } finally {
           submitBtn.disabled = false;
-          submitBtn.textContent = _isRegisterMode ? '🚀 Zarejestruj się' : '🔑 Zaloguj się';
         }
       });
     }
@@ -138,6 +147,7 @@ const App = (() => {
           UI.showView(viewId);
           if (viewId === 'view-dashboard') _refreshDashboard();
           if (viewId === 'view-history') _refreshHistory();
+          if (viewId === 'view-weight') _refreshWeight();
           if (viewId === 'view-settings') UI.loadSettings();
         }
       });
@@ -164,12 +174,12 @@ const App = (() => {
       _openTextModal();
     });
 
-    document.getElementById('btn-add-photo')?.addEventListener('click', () => {
-      _openPhotoModal();
-    });
-
     document.getElementById('btn-add-manual')?.addEventListener('click', () => {
       _openManualModal();
+    });
+
+    document.getElementById('btn-open-favorites')?.addEventListener('click', () => {
+      _openFavoritesModal();
     });
 
     // Text Modal
@@ -185,37 +195,14 @@ const App = (() => {
       _saveTextMeal();
     });
 
-    // Photo Modal
-    document.getElementById('photo-modal-close')?.addEventListener('click', () => {
-      _closePhotoModal();
+    // Text Modal Portions Add Form
+    document.getElementById('btn-search-add-cancel')?.addEventListener('click', () => {
+      document.getElementById('search-portion-area').classList.add('hidden');
+      _selectedSearchMatchForAdd = null;
     });
 
-    document.getElementById('btn-start-camera')?.addEventListener('click', () => {
-      _startCameraCapture();
-    });
-
-    document.getElementById('btn-capture')?.addEventListener('click', () => {
-      _capturePhoto();
-    });
-
-    document.getElementById('btn-upload-file')?.addEventListener('click', () => {
-      document.getElementById('file-input')?.click();
-    });
-
-    document.getElementById('file-input')?.addEventListener('change', (e) => {
-      _handleFileUpload(e.target.files[0]);
-    });
-
-    document.getElementById('photo-analyze-btn')?.addEventListener('click', () => {
-      _analyzePhoto();
-    });
-
-    document.getElementById('photo-save-btn')?.addEventListener('click', () => {
-      _savePhotoMeal();
-    });
-
-    document.getElementById('photo-retake-btn')?.addEventListener('click', () => {
-      _resetPhotoModal();
+    document.getElementById('btn-search-add-submit')?.addEventListener('click', () => {
+      _submitSearchMatchAdd();
     });
 
     // Manual Modal Close and Save
@@ -227,34 +214,41 @@ const App = (() => {
       _saveManualMeal();
     });
 
-    // Upload area drag/click
-    const uploadArea = document.getElementById('upload-area');
-    if (uploadArea) {
-      uploadArea.addEventListener('click', () => {
-        document.getElementById('file-input')?.click();
-      });
+    // Favorites Modal Close & Portion Actions
+    document.getElementById('favorites-modal-close')?.addEventListener('click', () => {
+      UI.closeModal('favorites-modal');
+    });
 
-      uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.style.borderColor = 'var(--accent-green)';
-        uploadArea.style.background = 'var(--accent-green-dim)';
-      });
+    document.getElementById('btn-fav-add-cancel')?.addEventListener('click', () => {
+      document.getElementById('favorites-portion-area').classList.add('hidden');
+      _selectedFavForAdd = null;
+    });
 
-      uploadArea.addEventListener('dragleave', () => {
-        uploadArea.style.borderColor = '';
-        uploadArea.style.background = '';
-      });
+    document.getElementById('btn-fav-add-submit')?.addEventListener('click', () => {
+      _submitFavoriteAdd();
+    });
 
-      uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.style.borderColor = '';
-        uploadArea.style.background = '';
-        const file = e.dataTransfer.files[0];
-        if (file) _handleFileUpload(file);
-      });
-    }
+    // Settings Profile Re-calculation
+    document.getElementById('btn-recalculate-goals')?.addEventListener('click', async () => {
+      const weight = parseFloat(document.getElementById('setting-weight').value) || 0;
+      const height = parseInt(document.getElementById('setting-height').value) || 0;
+      const targetWeight = parseFloat(document.getElementById('setting-target-weight').value) || weight;
 
-    // Settings
+      if (weight <= 30 || height <= 100) {
+        UI.showToast('Proszę podać poprawną wagę i wzrost', 'error');
+        return;
+      }
+
+      try {
+        await AppStorage.updateProfile(weight, height, targetWeight);
+        UI.showToast('Cele zostały ponownie obliczone i zapisane! 🔄', 'success');
+        UI.loadSettings();
+        _refreshDashboard();
+      } catch (err) {
+        UI.showToast(err.message, 'error');
+      }
+    });
+
     document.getElementById('setting-calorie-goal')?.addEventListener('change', async (e) => {
       try {
         await AppStorage.setDailyGoal(e.target.value);
@@ -310,14 +304,35 @@ const App = (() => {
       }
     });
 
+    // Weight Records Save
+    document.getElementById('btn-save-weight')?.addEventListener('click', async () => {
+      const input = document.getElementById('weight-input');
+      const val = parseFloat(input.value);
+
+      if (!val || val < 30 || val > 250) {
+        UI.showToast('Proszę podać poprawną wagę (30-250kg)', 'error');
+        return;
+      }
+
+      try {
+        await AppStorage.addWeightRecord(val);
+        input.value = '';
+        _refreshWeight();
+        _refreshDashboard();
+        UI.showToast('Waga zapisana i cel zaktualizowany! ⚖️', 'success');
+      } catch (err) {
+        UI.showToast(err.message, 'error');
+      }
+    });
+
     // Close modals on overlay click
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
           const id = overlay.id;
           if (id === 'text-modal') _closeTextModal();
-          if (id === 'photo-modal') _closePhotoModal();
           if (id === 'manual-modal') UI.closeModal('manual-modal');
+          if (id === 'favorites-modal') UI.closeModal('favorites-modal');
         }
       });
     });
@@ -341,6 +356,9 @@ const App = (() => {
     UI.updateCalorieRing(summary.totals.calories, goal);
     UI.updateMacroBars(summary.totals, macroGoals);
     UI.renderMealsList(summary.meals, _handleDeleteMeal);
+    
+    // Render the horizontal weekly calendar strip
+    UI.renderCalendarStrip(_currentDate, _goToDate);
   }
 
   async function _handleDeleteMeal(mealId) {
@@ -353,11 +371,115 @@ const App = (() => {
     }
   }
 
+  // --- Weight Tab ---
+  function _refreshWeight() {
+    const records = AppStorage.getWeightHistory();
+    UI.renderWeightHistory(records, _handleDeleteWeight);
+  }
+
+  async function _handleDeleteWeight(recordId) {
+    try {
+      await AppStorage.deleteWeightRecord(recordId);
+      _refreshWeight();
+      _refreshDashboard();
+      UI.showToast('Pomiar wagi usunięty', 'info');
+    } catch (e) {
+      UI.showToast(e.message, 'error');
+    }
+  }
+
+  // --- Favorites Modal ---
+  function _openFavoritesModal() {
+    document.getElementById('favorites-portion-area').classList.add('hidden');
+    _selectedFavForAdd = null;
+    _refreshFavoritesList();
+    UI.openModal('favorites-modal');
+  }
+
+  function _refreshFavoritesList() {
+    const list = AppStorage.getFavorites();
+    UI.renderFavoritesList(list, _selectFavoriteForAdd, _handleDeleteFavorite);
+  }
+
+  function _selectFavoriteForAdd(favId) {
+    const favorites = AppStorage.getFavorites();
+    const fav = favorites.find(f => f.id === favId);
+    if (!fav) return;
+
+    _selectedFavForAdd = fav;
+    
+    const portionArea = document.getElementById('favorites-portion-area');
+    const title = document.getElementById('fav-portion-title');
+    const qtyInput = document.getElementById('fav-portion-qty');
+
+    if (title) title.textContent = `${fav.name} (${fav.calories} kcal)`;
+    if (qtyInput) qtyInput.value = '1';
+    
+    if (portionArea) portionArea.classList.remove('hidden');
+    qtyInput.focus();
+  }
+
+  async function _handleDeleteFavorite(favId) {
+    try {
+      await AppStorage.deleteFavorite(favId);
+      _refreshFavoritesList();
+      UI.showToast('Posiłek usunięty z ulubionych', 'info');
+      
+      if (_selectedFavForAdd && _selectedFavForAdd.id === favId) {
+        document.getElementById('favorites-portion-area').classList.add('hidden');
+        _selectedFavForAdd = null;
+      }
+    } catch (e) {
+      UI.showToast(e.message, 'error');
+    }
+  }
+
+  async function _submitFavoriteAdd() {
+    if (!_selectedFavForAdd) return;
+
+    const qty = parseFloat(document.getElementById('fav-portion-qty').value) || 1;
+    if (qty <= 0) {
+      UI.showToast('Proszę podać poprawną ilość (np. 1 lub 0.5)', 'error');
+      return;
+    }
+
+    try {
+      const mealData = {
+        type: 'manual',
+        items: [{
+          name: _selectedFavForAdd.name,
+          amount: qty === 1 ? '1 porcja' : `${qty} × porcja`,
+          calories: Math.round(_selectedFavForAdd.calories * qty),
+          protein: Math.round(_selectedFavForAdd.protein * qty),
+          carbs: Math.round(_selectedFavForAdd.carbs * qty),
+          fat: Math.round(_selectedFavForAdd.fat * qty)
+        }],
+        total: {
+          calories: Math.round(_selectedFavForAdd.calories * qty),
+          protein: Math.round(_selectedFavForAdd.protein * qty),
+          carbs: Math.round(_selectedFavForAdd.carbs * qty),
+          fat: Math.round(_selectedFavForAdd.fat * qty)
+        }
+      };
+
+      await AppStorage.addMeal(_currentDate, mealData);
+      UI.closeModal('favorites-modal');
+      _refreshDashboard();
+      UI.showToast(`Dodano: ${_selectedFavForAdd.name} x${qty} (${mealData.total.calories} kcal)`, 'success');
+      _selectedFavForAdd = null;
+    } catch (e) {
+      UI.showToast(e.message, 'error');
+    }
+  }
+
   // --- Text Analysis & Local DB ---
   function _openTextModal() {
     _currentAIResult = null;
+    _selectedSearchMatchForAdd = null;
     document.getElementById('meal-text-input').value = '';
     document.getElementById('text-result-area').innerHTML = '';
+    document.getElementById('search-matches-list').innerHTML = '';
+    document.getElementById('search-portion-area').classList.add('hidden');
     document.getElementById('text-save-btn').classList.add('hidden');
     UI.openModal('text-modal');
     setTimeout(() => document.getElementById('meal-text-input')?.focus(), 350);
@@ -366,6 +488,7 @@ const App = (() => {
   function _closeTextModal() {
     UI.closeModal('text-modal');
     _currentAIResult = null;
+    _selectedSearchMatchForAdd = null;
   }
 
   async function _analyzeText() {
@@ -377,31 +500,34 @@ const App = (() => {
     }
 
     const resultArea = document.getElementById('text-result-area');
+    const matchesArea = document.getElementById('search-matches-list');
     const analyzeBtn = document.getElementById('text-analyze-btn');
     const saveBtn = document.getElementById('text-save-btn');
 
-    // 1. Try local database first
-    const localResult = FoodDB.parseMealDescription(text);
-    if (localResult && localResult.items.length > 0) {
-      _currentAIResult = localResult;
-      resultArea.innerHTML = UI.renderAIResult(_currentAIResult);
-      saveBtn.classList.remove('hidden');
-      UI.showToast('Znaleziono w lokalnej bazie!', 'success');
+    // Reset portions card
+    document.getElementById('search-portion-area').classList.add('hidden');
+    _selectedSearchMatchForAdd = null;
+    resultArea.innerHTML = '';
+
+    // Search local database for items matching input (like 'jajko')
+    const matches = FoodDB.search(text, 5);
+    if (matches && matches.length > 0) {
+      UI.renderSearchMatches(matches, _selectSearchMatchForAdd);
+      UI.showToast('Znaleziono dopasowania w bazie!', 'success');
+      
+      // Let the user also search via AI if they want
+      analyzeBtn.innerHTML = '🤖 Pytaj AI (Gemini)';
       return;
     }
 
-    // 2. If API key is set, try AI
+    // Fallback: If no matches or if AI was explicitly clicked
     const apiKey = AppStorage.getApiKey();
     if (apiKey) {
       analyzeBtn.disabled = true;
       analyzeBtn.innerHTML = '<div class="loading__spinner" style="width:20px;height:20px;border-width:2px"></div> Szukam...';
       saveBtn.classList.add('hidden');
-      UI.showLoading('text-result-area', '🤖 Nie znaleziono w bazie, pytam AI...');
-
-      AI.onStatus((msg) => {
-        const statusEl = document.querySelector('#text-result-area .loading__text');
-        if (statusEl) statusEl.textContent = msg;
-      });
+      matchesArea.innerHTML = '';
+      UI.showLoading('text-result-area', '🤖 Pytam AI (Gemini)...');
 
       try {
         _currentAIResult = await AI.analyzeText(text);
@@ -417,19 +543,70 @@ const App = (() => {
         _currentAIResult = null;
       } finally {
         analyzeBtn.disabled = false;
-        analyzeBtn.innerHTML = '🔍 Szukaj / Analizuj';
+        analyzeBtn.innerHTML = '🔍 Szukaj w bazie / Analizuj';
       }
     } else {
-      // No API key & no database hit
       resultArea.innerHTML = `
         <div class="meals-empty">
           <div class="meals-empty__icon">🔍</div>
           <div class="meals-empty__text">Nie znaleziono "${text}" w bazie<br>
-            <span class="text-muted text-xs">Spróbuj prostszych nazw (np. "jajecznica", "banan") lub dodaj klucz Gemini API w Ustawieniach, by włączyć sztuczną inteligencję.</span>
+            <span class="text-muted text-xs">Spróbuj prostszych nazw (np. "jajko", "banan") lub dodaj klucz Gemini API w Ustawieniach, by włączyć sztuczną inteligencję.</span>
           </div>
         </div>
       `;
       _currentAIResult = null;
+    }
+  }
+
+  function _selectSearchMatchForAdd(match) {
+    _selectedSearchMatchForAdd = match;
+
+    const portionArea = document.getElementById('search-portion-area');
+    const title = document.getElementById('search-portion-title');
+    const qtyInput = document.getElementById('search-portion-qty');
+
+    if (title) title.textContent = `${match.name} (${match.calories} kcal | ${match.portion})`;
+    if (qtyInput) qtyInput.value = '1';
+
+    if (portionArea) portionArea.classList.remove('hidden');
+    qtyInput.focus();
+  }
+
+  async function _submitSearchMatchAdd() {
+    if (!_selectedSearchMatchForAdd) return;
+
+    const qty = parseFloat(document.getElementById('search-portion-qty').value) || 1;
+    if (qty <= 0) {
+      UI.showToast('Proszę podać poprawną ilość (np. 1 lub 0.5)', 'error');
+      return;
+    }
+
+    try {
+      const mealData = {
+        type: 'text',
+        items: [{
+          name: _selectedSearchMatchForAdd.name,
+          amount: qty === 1 ? _selectedSearchMatchForAdd.portion : `${qty} × ${_selectedSearchMatchForAdd.portion}`,
+          calories: Math.round(_selectedSearchMatchForAdd.calories * qty),
+          protein: Math.round(_selectedSearchMatchForAdd.protein * qty),
+          carbs: Math.round(_selectedSearchMatchForAdd.carbs * qty),
+          fat: Math.round(_selectedSearchMatchForAdd.fat * qty)
+        }],
+        total: {
+          calories: Math.round(_selectedSearchMatchForAdd.calories * qty),
+          protein: Math.round(_selectedSearchMatchForAdd.protein * qty),
+          carbs: Math.round(_selectedSearchMatchForAdd.carbs * qty),
+          fat: Math.round(_selectedSearchMatchForAdd.fat * qty)
+        }
+      };
+
+      await AppStorage.addMeal(_currentDate, mealData);
+      UI.closeModal('text-modal');
+      _refreshDashboard();
+      UI.showToast(`Dodano: ${_selectedSearchMatchForAdd.name} x${qty} (${mealData.total.calories} kcal)`, 'success');
+      _selectedSearchMatchForAdd = null;
+    } catch (e) {
+      UI.showToast(e.message, 'error');
     }
   }
 
@@ -452,166 +629,6 @@ const App = (() => {
     }
   }
 
-  // --- Photo Analysis ---
-  function _openPhotoModal() {
-    _currentAIResult = null;
-    _photoDataUrl = null;
-    _resetPhotoModal();
-    UI.openModal('photo-modal');
-  }
-
-  function _closePhotoModal() {
-    Camera.stopCamera();
-    _cameraActive = false;
-    UI.closeModal('photo-modal');
-    _currentAIResult = null;
-    _photoDataUrl = null;
-  }
-
-  function _resetPhotoModal() {
-    Camera.stopCamera();
-    _cameraActive = false;
-    _photoDataUrl = null;
-    _currentAIResult = null;
-
-    const previewArea = document.getElementById('photo-preview-area');
-    const resultArea = document.getElementById('photo-result-area');
-    const cameraSection = document.getElementById('camera-section');
-    const capturedSection = document.getElementById('captured-section');
-    const analyzeBtn = document.getElementById('photo-analyze-btn');
-    const saveBtn = document.getElementById('photo-save-btn');
-    const retakeBtn = document.getElementById('photo-retake-btn');
-
-    if (previewArea) previewArea.innerHTML = '';
-    if (resultArea) resultArea.innerHTML = '';
-    if (cameraSection) cameraSection.classList.remove('hidden');
-    if (capturedSection) capturedSection.classList.add('hidden');
-    if (analyzeBtn) analyzeBtn.classList.add('hidden');
-    if (saveBtn) saveBtn.classList.add('hidden');
-    if (retakeBtn) retakeBtn.classList.add('hidden');
-
-    document.getElementById('camera-start-section').classList.remove('hidden');
-    document.getElementById('camera-live-section').classList.add('hidden');
-  }
-
-  async function _startCameraCapture() {
-    const video = document.getElementById('camera-video');
-    const cameraSection = document.getElementById('camera-section');
-
-    try {
-      await Camera.startCamera(video);
-      _cameraActive = true;
-
-      if (cameraSection) {
-        document.getElementById('camera-start-section').classList.add('hidden');
-        document.getElementById('camera-live-section').classList.remove('hidden');
-      }
-    } catch (error) {
-      UI.showToast(error.message, 'error');
-    }
-  }
-
-  function _capturePhoto() {
-    try {
-      _photoDataUrl = Camera.capturePhoto();
-      Camera.stopCamera();
-      _cameraActive = false;
-      _showCapturedPhoto(_photoDataUrl);
-    } catch (error) {
-      UI.showToast(error.message, 'error');
-    }
-  }
-
-  async function _handleFileUpload(file) {
-    try {
-      _photoDataUrl = await Camera.processFileUpload(file);
-      _showCapturedPhoto(_photoDataUrl);
-    } catch (error) {
-      UI.showToast(error.message, 'error');
-    }
-  }
-
-  function _showCapturedPhoto(dataUrl) {
-    const previewArea = document.getElementById('photo-preview-area');
-    const cameraSection = document.getElementById('camera-section');
-    const capturedSection = document.getElementById('captured-section');
-    const analyzeBtn = document.getElementById('photo-analyze-btn');
-    const retakeBtn = document.getElementById('photo-retake-btn');
-
-    if (previewArea) {
-      previewArea.innerHTML = `<img src="${dataUrl}" alt="Zdjęcie posiłku">`;
-    }
-
-    if (cameraSection) cameraSection.classList.add('hidden');
-    if (capturedSection) capturedSection.classList.remove('hidden');
-    if (analyzeBtn) analyzeBtn.classList.remove('hidden');
-    if (retakeBtn) retakeBtn.classList.remove('hidden');
-  }
-
-  async function _analyzePhoto() {
-    if (!_photoDataUrl) {
-      UI.showToast('Najpierw zrób zdjęcie lub wybierz plik', 'error');
-      return;
-    }
-
-    const apiKey = AppStorage.getApiKey();
-    if (!apiKey) {
-      UI.showToast('Do analizy zdjęć wymagany jest klucz Gemini API. Dodaj go w Ustawieniach.', 'error');
-      return;
-    }
-
-    const resultArea = document.getElementById('photo-result-area');
-    const analyzeBtn = document.getElementById('photo-analyze-btn');
-    const saveBtn = document.getElementById('photo-save-btn');
-
-    analyzeBtn.disabled = true;
-    analyzeBtn.innerHTML = '<div class="loading__spinner" style="width:20px;height:20px;border-width:2px"></div> Analizuję...';
-    saveBtn.classList.add('hidden');
-    UI.showLoading('photo-result-area', '🤖 AI rozpoznaje jedzenie ze zdjęcia...');
-
-    AI.onStatus((msg) => {
-      const statusEl = document.querySelector('#photo-result-area .loading__text');
-      if (statusEl) statusEl.textContent = msg;
-    });
-
-    try {
-      _currentAIResult = await AI.analyzeImage(_photoDataUrl);
-      resultArea.innerHTML = UI.renderAIResult(_currentAIResult);
-      saveBtn.classList.remove('hidden');
-    } catch (error) {
-      resultArea.innerHTML = `
-        <div class="meals-empty">
-          <div class="meals-empty__icon">❌</div>
-          <div class="meals-empty__text">${error.message}</div>
-        </div>
-      `;
-      _currentAIResult = null;
-    } finally {
-      analyzeBtn.disabled = false;
-      analyzeBtn.innerHTML = '🔍 Analizuj zdjęcie';
-    }
-  }
-
-  async function _savePhotoMeal() {
-    if (!_currentAIResult) return;
-
-    try {
-      await AppStorage.addMeal(_currentDate, {
-        type: 'photo',
-        items: _currentAIResult.items,
-        total: _currentAIResult.total,
-      });
-
-      _closePhotoModal();
-      _refreshDashboard();
-      UI.showToast(`Dodano posiłek: ${_currentAIResult.total.calories} kcal`, 'success');
-      _currentAIResult = null;
-      _photoDataUrl = null;
-    } catch (e) {
-      UI.showToast(e.message, 'error');
-    }
-  }
-
   // --- Manual Entry ---
   function _openManualModal() {
     document.getElementById('manual-name').value = '';
@@ -619,6 +636,10 @@ const App = (() => {
     document.getElementById('manual-protein').value = '';
     document.getElementById('manual-carbs').value = '';
     document.getElementById('manual-fat').value = '';
+    
+    const favCheck = document.getElementById('manual-fav-check');
+    if (favCheck) favCheck.checked = false;
+
     UI.openModal('manual-modal');
     setTimeout(() => document.getElementById('manual-name')?.focus(), 350);
   }
@@ -629,6 +650,7 @@ const App = (() => {
     const protein = parseInt(document.getElementById('manual-protein').value) || 0;
     const carbs = parseInt(document.getElementById('manual-carbs').value) || 0;
     const fat = parseInt(document.getElementById('manual-fat').value) || 0;
+    const isFav = document.getElementById('manual-fav-check')?.checked || false;
 
     if (!name) {
       UI.showToast('Wpisz nazwę posiłku', 'error');
@@ -640,22 +662,34 @@ const App = (() => {
     }
 
     try {
+      const mealItem = {
+        name: name,
+        amount: '1 porcja',
+        calories: calories,
+        protein: protein,
+        carbs: carbs,
+        fat: fat,
+      };
+
       await AppStorage.addMeal(_currentDate, {
         type: 'manual',
-        items: [{
-          name: name,
-          amount: '1 porcja',
-          calories: calories,
-          protein: protein,
-          carbs: carbs,
-          fat: fat,
-        }],
+        items: [mealItem],
         total: { calories, protein, carbs, fat },
       });
 
+      if (isFav) {
+        try {
+          await AppStorage.addFavorite(mealItem);
+          UI.showToast('Dodano posiłek i zapisano do Ulubionych! ⭐', 'success');
+        } catch (e) {
+          UI.showToast(e.message, 'info');
+        }
+      } else {
+        UI.showToast(`Dodano: ${name} (${calories} kcal)`, 'success');
+      }
+
       UI.closeModal('manual-modal');
       _refreshDashboard();
-      UI.showToast(`Dodano: ${name} (${calories} kcal)`, 'success');
     } catch (e) {
       UI.showToast(e.message, 'error');
     }
@@ -669,7 +703,6 @@ const App = (() => {
   }
 
   function _goToDate(dateStr) {
-    // Parse year, month, date from string to prevent timezone offset shifts
     const parts = dateStr.split('-');
     _currentDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     UI.showView('view-dashboard');

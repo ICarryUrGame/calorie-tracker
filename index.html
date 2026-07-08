@@ -33,7 +33,7 @@
             <i data-lucide="flame" style="width: 36px; height: 36px; color: var(--accent-green)"></i>
           </div>
           <h1 class="auth-title" id="auth-title">Zaloguj się</h1>
-          <p class="auth-subtitle" id="auth-subtitle">Wpisz swoje dane, aby uzyskać dostęp do licznika kalorii i synchronizacji danych.</p>
+          <p class="auth-subtitle" id="auth-subtitle">Uzyskaj natychmiastowy dostęp do licznika kalorii, bazy 160+ produktów, śledzenia wagi z godziną oraz automatycznego kalkulatora celów BMR.</p>
         </div>
 
         <form id="auth-form" class="auth-form">
@@ -47,10 +47,25 @@
             <input type="password" id="auth-password" class="input" placeholder="••••••••" required minlength="4" autocomplete="current-password">
           </div>
 
-          <!-- Goal input - only visible during registration -->
-          <div class="input-group hidden" id="register-goal-group">
-            <label for="auth-goal">Dzienny cel kaloryczny (kcal)</label>
-            <input type="number" id="auth-goal" class="input" value="2000" min="500" max="10000" step="50">
+          <!-- Profile inputs - only visible during registration -->
+          <div class="hidden" id="register-goal-group" style="display:flex; flex-direction:column; gap:16px">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px">
+              <div class="input-group">
+                <label for="auth-weight">Waga (kg)</label>
+                <input type="number" id="auth-weight" class="input" placeholder="np. 80" min="30" max="250" step="0.1">
+              </div>
+              <div class="input-group">
+                <label for="auth-height">Wzrost (cm)</label>
+                <input type="number" id="auth-height" class="input" placeholder="np. 180" min="100" max="250">
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="auth-target-weight">Cel wagowy (kg)</label>
+              <input type="number" id="auth-target-weight" class="input" placeholder="np. 75" min="30" max="250" step="0.1">
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4">
+              💡 Aplikacja automatycznie obliczy Twoje zapotrzebowanie za pomocą wzoru <strong>Mifflin-St Jeor</strong> i dobierze odpowiedni deficyt/nadwyżkę.
+            </div>
           </div>
 
           <button type="submit" class="btn btn--primary btn--full mt-16" id="auth-submit-btn">
@@ -102,6 +117,9 @@
             <i data-lucide="chevron-right" style="width:20px; height:20px"></i>
           </button>
         </div>
+
+        <!-- Horizontal Weekly Calendar Strip -->
+        <div class="calendar-strip" id="calendar-strip"></div>
 
         <!-- Calorie Ring -->
         <div class="calorie-ring">
@@ -159,25 +177,25 @@
           </div>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="action-buttons">
+        <!-- Action Buttons (3 Columns layout) -->
+        <div class="action-buttons" style="grid-template-columns: repeat(3, 1fr)">
           <button class="action-btn" id="btn-add-text">
             <div class="action-btn__icon action-btn__icon--text">
-              <i data-lucide="text-cursor" style="width: 24px; height: 24px"></i>
+              <i data-lucide="text-cursor" style="width: 22px; height: 22px"></i>
             </div>
-            <span>Dodaj opis</span>
-          </button>
-          <button class="action-btn" id="btn-add-photo">
-            <div class="action-btn__icon action-btn__icon--photo">
-              <i data-lucide="camera" style="width: 24px; height: 24px"></i>
-            </div>
-            <span>Zrób zdjęcie</span>
+            <span>Wyszukaj / AI</span>
           </button>
           <button class="action-btn" id="btn-add-manual">
             <div class="action-btn__icon action-btn__icon--manual">
-              <i data-lucide="pen-tool" style="width: 24px; height: 24px"></i>
+              <i data-lucide="pen-tool" style="width: 22px; height: 22px"></i>
             </div>
             <span>Ręcznie</span>
+          </button>
+          <button class="action-btn" id="btn-open-favorites" style="border-color: rgba(255, 219, 61, 0.25)">
+            <div class="action-btn__icon" style="background:var(--accent-yellow-dim); color:var(--accent-yellow)">
+              <i data-lucide="star" style="width: 22px; height: 22px"></i>
+            </div>
+            <span>Ulubione</span>
           </button>
         </div>
 
@@ -209,6 +227,32 @@
         <div id="history-list" class="history-list"></div>
       </div>
 
+      <!-- === WEIGHT VIEW === -->
+      <div id="view-weight" class="view">
+        <div class="header">
+          <div class="header__title">
+            <i data-lucide="scale" style="color:var(--accent-green); width: 28px; height: 28px"></i>
+            <h1 style="font-size:1.5rem; margin-left: 8px">Kontrola wagi</h1>
+          </div>
+        </div>
+
+        <div class="glass-card mb-24 glass-card--no-hover">
+          <h3 class="mb-12">Wpisz dzisiejszą wagę</h3>
+          <div class="input-group mb-12">
+            <div style="display:flex; gap:10px">
+              <input type="number" id="weight-input" class="input" placeholder="np. 79.5" step="0.1" min="30" max="250">
+              <button class="btn btn--primary" id="btn-save-weight" style="padding:14px 24px">Zapisz</button>
+            </div>
+          </div>
+          <p class="text-xs text-muted">Każdy pomiar wagi zostanie zapisany z dokładną godziną. Aktualna waga na bieżąco wpływa na cel BMR.</p>
+        </div>
+
+        <div class="meals-section">
+          <h3 class="meals-section__title mb-12">Historia pomiarów</h3>
+          <div id="weight-history-list" class="history-list"></div>
+        </div>
+      </div>
+
       <!-- === SETTINGS VIEW === -->
       <div id="view-settings" class="view">
         <div class="header">
@@ -219,13 +263,35 @@
         </div>
 
         <div class="settings-section">
-          <div class="settings-section__title">Dzienne cele makro</div>
+          <div class="settings-section__title">Metryka i Kalkulator BMR</div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px" class="mb-12">
+            <div class="settings-item" style="flex-direction:column; align-items:flex-start; gap:8px">
+              <span class="text-xs text-muted">Waga (kg)</span>
+              <input type="number" id="setting-weight" class="settings-item__input" style="width:100%" step="0.1">
+            </div>
+            <div class="settings-item" style="flex-direction:column; align-items:flex-start; gap:8px">
+              <span class="text-xs text-muted">Wzrost (cm)</span>
+              <input type="number" id="setting-height" class="settings-item__input" style="width:100%">
+            </div>
+          </div>
+
+          <div class="settings-item mb-12">
+            <span class="settings-item__label">Cel wagowy</span>
+            <div class="settings-item__value">
+              <input type="number" id="setting-target-weight" class="settings-item__input" step="0.1">
+              <span class="settings-item__unit">kg</span>
+            </div>
+          </div>
+
+          <button class="btn btn--purple btn--full mb-24" id="btn-recalculate-goals">
+            🔄 Przelicz zapotrzebowanie (BMR)
+          </button>
+
+          <div class="settings-section__title">Ręczne Cele makro</div>
 
           <div class="settings-item">
-            <span class="settings-item__label">
-              <i data-lucide="target" style="width:16px; height:16px; color:var(--accent-cyan); vertical-align:middle; margin-right:8px"></i>
-              Cel kaloryczny
-            </span>
+            <span class="settings-item__label">🎯 Cel kaloryczny</span>
             <div class="settings-item__value">
               <input type="number" id="setting-calorie-goal" class="settings-item__input" min="500" max="10000" step="50">
               <span class="settings-item__unit">kcal</span>
@@ -233,10 +299,7 @@
           </div>
 
           <div class="settings-item">
-            <span class="settings-item__label">
-              <i data-lucide="egg" style="width:16px; height:16px; color:var(--accent-blue); vertical-align:middle; margin-right:8px"></i>
-              Białko
-            </span>
+            <span class="settings-item__label">🥩 Białko</span>
             <div class="settings-item__value">
               <input type="number" id="setting-protein" class="settings-item__input" min="0" max="500" step="5">
               <span class="settings-item__unit">g</span>
@@ -244,10 +307,7 @@
           </div>
 
           <div class="settings-item">
-            <span class="settings-item__label">
-              <i data-lucide="wheat" style="width:16px; height:16px; color:var(--accent-orange); vertical-align:middle; margin-right:8px"></i>
-              Węglowodany
-            </span>
+            <span class="settings-item__label">🍞 Węglowodany</span>
             <div class="settings-item__value">
               <input type="number" id="setting-carbs" class="settings-item__input" min="0" max="600" step="5">
               <span class="settings-item__unit">g</span>
@@ -255,10 +315,7 @@
           </div>
 
           <div class="settings-item">
-            <span class="settings-item__label">
-              <i data-lucide="droplet" style="width:16px; height:16px; color:var(--accent-yellow); vertical-align:middle; margin-right:8px"></i>
-              Tłuszcze
-            </span>
+            <span class="settings-item__label">🧈 Tłuszcze</span>
             <div class="settings-item__value">
               <input type="number" id="setting-fat" class="settings-item__input" min="0" max="300" step="5">
               <span class="settings-item__unit">g</span>
@@ -288,7 +345,7 @@
         </div>
 
         <div class="text-center mt-16">
-          <p class="text-xs text-muted">CalorieAI v2.1 — Twoje dane są zapisane bezpiecznie w bazie</p>
+          <p class="text-xs text-muted">CalorieAI v2.3 — Bezpieczny kalkulator i dziennik</p>
         </div>
       </div>
 
@@ -304,6 +361,12 @@
         </span>
         <span>Główna</span>
       </button>
+      <button class="bottom-nav__item" data-view="view-weight">
+        <span class="bottom-nav__icon">
+          <i data-lucide="scale" style="width: 20px; height: 20px"></i>
+        </span>
+        <span>Waga</span>
+      </button>
       <button class="bottom-nav__item" data-view="view-history">
         <span class="bottom-nav__icon">
           <i data-lucide="calendar" style="width: 20px; height: 20px"></i>
@@ -314,7 +377,7 @@
         <span class="bottom-nav__icon">
           <i data-lucide="sliders" style="width: 20px; height: 20px"></i>
         </span>
-        <span>Ustawienia</span>
+        <span>Profil</span>
       </button>
     </div>
   </nav>
@@ -331,14 +394,30 @@
       </div>
 
       <div class="input-group mb-16">
-        <label for="meal-text-input">Co dzisiaj zjadłeś/aś?</label>
-        <textarea id="meal-text-input" class="input" placeholder="np. 2 jajka sadzone, chleb razowy..." rows="3"></textarea>
+        <label for="meal-text-input">Wpisz co zjadłeś/aś (np. "jajko", "banan")</label>
+        <textarea id="meal-text-input" class="input" placeholder="Wyszukaj z lokalnej bazy lub wpisz opis do analizy AI..." rows="3"></textarea>
       </div>
 
       <button class="btn btn--primary btn--full mb-16" id="text-analyze-btn">
         <i data-lucide="search"></i>
-        <span>Szukaj / Analizuj</span>
+        <span>Szukaj w bazie / Analizuj</span>
       </button>
+
+      <!-- Offline matches clickable list -->
+      <div id="search-matches-list" class="mb-16"></div>
+
+      <!-- Quantity multiplier card inside search modal -->
+      <div id="search-portion-area" class="hidden glass-card glass-card--no-hover mb-16" style="border: 1px solid var(--accent-green)">
+        <h3 id="search-portion-title" class="mb-12" style="font-size: 0.95rem">Wpisz ilość porcji</h3>
+        <div class="input-group mb-12">
+          <label for="search-portion-qty">Ilość sztuk / porcji</label>
+          <div style="display:flex; gap:10px">
+            <input type="number" id="search-portion-qty" class="input" value="1" min="0.1" step="0.5" style="text-align:center">
+            <button class="btn btn--primary" id="btn-search-add-submit">Dodaj do dnia</button>
+          </div>
+        </div>
+        <button class="btn btn--secondary btn--sm btn--full" id="btn-search-add-cancel">Anuluj</button>
+      </div>
 
       <div id="text-result-area"></div>
 
@@ -349,82 +428,12 @@
     </div>
   </div>
 
-  <!-- ========== PHOTO ANALYSIS MODAL ========== -->
-  <div id="photo-modal" class="modal-overlay">
-    <div class="modal">
-      <div class="modal__handle"></div>
-      <div class="modal__header">
-        <h2 class="modal__title">📷 Zdjęcie posiłku</h2>
-        <button class="modal__close" id="photo-modal-close">
-          <i data-lucide="x" style="width:18px; height:18px"></i>
-        </button>
-      </div>
-
-      <!-- Camera Section -->
-      <div id="camera-section">
-        <div id="camera-start-section">
-          <div class="upload-area" id="upload-area">
-            <div class="upload-area__icon">
-              <i data-lucide="image-plus" style="width: 44px; height: 44px; margin: 0 auto; color: var(--text-secondary)"></i>
-            </div>
-            <div class="upload-area__text" style="margin-top:12px">Przeciągnij zdjęcie tutaj</div>
-            <div class="upload-area__hint">lub kliknij aby wybrać z galerii</div>
-          </div>
-          <input type="file" id="file-input" accept="image/*" capture="environment" class="hidden">
-
-          <div class="text-center mb-16">
-            <span class="text-muted text-sm">— lub użyj kamery —</span>
-          </div>
-
-          <button class="btn btn--purple btn--full" id="btn-start-camera">
-            <i data-lucide="video"></i>
-            <span>Uruchom aparat</span>
-          </button>
-        </div>
-
-        <div id="camera-live-section" class="hidden">
-          <div class="camera-container">
-            <video id="camera-video" autoplay playsinline muted></video>
-          </div>
-          <div class="camera-controls">
-            <button class="camera-btn" id="btn-capture" aria-label="Zrób zdjęcie">
-              <i data-lucide="aperture" style="width:32px; height:32px"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Captured Photo View -->
-      <div id="captured-section" class="hidden">
-        <div id="photo-preview-area" class="mb-16"></div>
-
-        <div style="display:flex; gap:10px; margin-bottom:16px">
-          <button class="btn btn--secondary btn--full" id="photo-retake-btn">
-            <i data-lucide="refresh-cw"></i>
-            <span>Inne zdjęcie</span>
-          </button>
-          <button class="btn btn--primary btn--full" id="photo-analyze-btn">
-            <i data-lucide="sparkles"></i>
-            <span>Analizuj AI</span>
-          </button>
-        </div>
-
-        <div id="photo-result-area"></div>
-
-        <button class="btn btn--primary btn--full mt-16 hidden" id="photo-save-btn">
-          <i data-lucide="check"></i>
-          <span>Zapisz posiłek</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- ========== MANUAL ENTRY MODAL ========== -->
   <div id="manual-modal" class="modal-overlay">
     <div class="modal">
       <div class="modal__handle"></div>
       <div class="modal__header">
-        <h2 class="modal__title">✍️ Dodaj ręcznie</h2>
+        <h2 class="modal__title">✍️ Dodaj posiłek</h2>
         <button class="modal__close" id="manual-modal-close">
           <i data-lucide="x" style="width:18px; height:18px"></i>
         </button>
@@ -432,15 +441,15 @@
 
       <div class="input-group mb-12">
         <label for="manual-name">Nazwa produktu / posiłku</label>
-        <input type="text" id="manual-name" class="input" placeholder="np. Obiad domowy, banan">
+        <input type="text" id="manual-name" class="input" placeholder="np. Kanapka z szynką, owsianka">
       </div>
 
       <div class="input-group mb-12">
         <label for="manual-calories">Kalorie (kcal)</label>
-        <input type="number" id="manual-calories" class="input" placeholder="np. 450" min="0" step="10">
+        <input type="number" id="manual-calories" class="input" placeholder="np. 350" min="0" step="10">
       </div>
 
-      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px" class="mb-24">
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px" class="mb-16">
         <div class="input-group">
           <label for="manual-protein">🥩 Białko (g)</label>
           <input type="number" id="manual-protein" class="input" placeholder="0" min="0">
@@ -455,6 +464,12 @@
         </div>
       </div>
 
+      <!-- Add to favorites checkbox -->
+      <div class="input-group mb-24" style="flex-direction:row; align-items:center; gap:10px">
+        <input type="checkbox" id="manual-fav-check" style="width:20px; height:20px; accent-color:var(--accent-green)">
+        <label for="manual-fav-check" style="cursor:pointer; user-select:none">⭐ Zapisz jako Ulubione (szybki wybór)</label>
+      </div>
+
       <button class="btn btn--primary btn--full" id="manual-save-btn">
         <i data-lucide="check"></i>
         <span>Zapisz posiłek</span>
@@ -462,12 +477,41 @@
     </div>
   </div>
 
+  <!-- ========== FAVORITES MODAL ========== -->
+  <div id="favorites-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal__handle"></div>
+      <div class="modal__header">
+        <h2 class="modal__title">⭐ Twoje Ulubione Dania</h2>
+        <button class="modal__close" id="favorites-modal-close">
+          <i data-lucide="x" style="width:18px; height:18px"></i>
+        </button>
+      </div>
+
+      <div id="favorites-list-area" class="mb-24">
+        <!-- Rendered favorites lists -->
+      </div>
+
+      <!-- Portion selector layout inside modal -->
+      <div id="favorites-portion-area" class="hidden glass-card glass-card--no-hover mb-16">
+        <h3 id="fav-portion-title" class="mb-12">Kanapka z szynką</h3>
+        <div class="input-group mb-12">
+          <label for="fav-portion-qty">Ilość sztuk / porcji</label>
+          <div style="display:flex; gap:10px">
+            <input type="number" id="fav-portion-qty" class="input" value="1" min="0.1" step="0.5" style="text-align:center">
+            <button class="btn btn--primary" id="btn-fav-add-submit">Dodaj</button>
+          </div>
+        </div>
+        <button class="btn btn--secondary btn--sm btn--full" id="btn-fav-add-cancel">Anuluj</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
-  <script src="js/storage.js?v=7"></script>
-  <script src="js/fooddb.js?v=7"></script>
-  <script src="js/ai.js?v=7"></script>
-  <script src="js/camera.js?v=7"></script>
-  <script src="js/ui.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <script src="js/storage.js?v=11"></script>
+  <script src="js/fooddb.js?v=11"></script>
+  <script src="js/ai.js?v=11"></script>
+  <script src="js/ui.js?v=11"></script>
+  <script src="js/app.js?v=11"></script>
 </body>
 </html>

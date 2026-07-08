@@ -1489,12 +1489,98 @@ textarea.input {
   border-radius: var(--radius-full);
 }
 
+/* --- Favorites & Weight elements --- */
+#favorites-list-area {
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.fav-item-row:hover {
+  background: var(--bg-glass-strong);
+  border-color: var(--accent-yellow);
+}
+
+#favorites-portion-area {
+  border: 1px solid var(--accent-yellow);
+  box-shadow: 0 0 16px rgba(255, 219, 61, 0.15);
+  animation: slideInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 /* --- Utility --- */
 .hidden { display: none !important; }
 .mb-12 { margin-bottom: 12px; }
 .mb-16 { margin-bottom: 16px; }
 .mb-24 { margin-bottom: 24px; }
 .mt-16 { margin-top: 16px; }
+
+/* --- Calendar Strip --- */
+.calendar-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  padding: 4px 2px;
+}
+
+.calendar-day {
+  flex: 1;
+  min-width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 2px;
+  border-radius: var(--radius-md);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  user-select: none;
+}
+
+.calendar-day:hover {
+  background: var(--bg-glass-strong);
+  transform: translateY(-2px);
+}
+
+.calendar-day.active {
+  border-color: var(--accent-green);
+  background: rgba(0, 240, 118, 0.08);
+  box-shadow: 0 0 10px rgba(0, 240, 118, 0.2);
+}
+
+.calendar-day__name {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.calendar-day__num {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.calendar-day__kcal {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--accent-green);
+  white-space: nowrap;
+}
+
+.calendar-day__kcal.empty {
+  color: var(--text-muted);
+  opacity: 0.45;
+}
 
 /* --- Responsive --- */
 @media (min-width: 481px) {
