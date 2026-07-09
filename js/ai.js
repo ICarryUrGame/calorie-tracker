@@ -6,9 +6,8 @@
 const AI = (() => {
   // Models to try in order (different models have separate quotas)
   const MODELS = [
-    'gemini-2.0-flash-lite',
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-flash',
   ];
   const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -23,6 +22,7 @@ ZASADY:
 6. Wartości podawaj w liczbach całkowitych
 7. Kalorie w kcal, makroskładniki w gramach
 8. Bądź realistyczny w szacunkach — typowe polskie porcje
+9. Używaj poprawnej polskiej pisowni ze znakami diakrytycznymi (ą, ć, ę, ł, ń, ó, ś, ź, ż), np. "masło" zamiast "maslo", "bułka" zamiast "bulka", "ser żółty" zamiast "ser zolty".
 
 FORMAT ODPOWIEDZI (WYŁĄCZNIE TEN JSON, bez markdown):
 {
@@ -58,7 +58,7 @@ FORMAT ODPOWIEDZI (WYŁĄCZNIE TEN JSON, bez markdown):
 
   async function analyzeText(text) {
     const apiKey = AppStorage.getApiKey();
-    if (!apiKey) throw new Error('Brak klucza API. Ustaw go w ustawieniach.');
+    if (!apiKey) throw new Error('Brak klucza API Gemini. Wpisz poprawny klucz w Ustawieniach konta (zakładka z kołem zębatym) lub spróbuj wpisać prostszą nazwę jedzenia (np. "jajko", "chleb", "masło"), aby wyszukać je bezpośrednio z naszej wbudowanej bazy danych (która nie wymaga klucza API).');
 
     const body = {
       contents: [{
@@ -77,7 +77,7 @@ FORMAT ODPOWIEDZI (WYŁĄCZNIE TEN JSON, bez markdown):
 
   async function analyzeImage(base64Image, mimeType = 'image/jpeg') {
     const apiKey = AppStorage.getApiKey();
-    if (!apiKey) throw new Error('Brak klucza API. Ustaw go w ustawieniach.');
+    if (!apiKey) throw new Error('Brak klucza API Gemini. Wpisz poprawny klucz w Ustawieniach konta (zakładka z kołem zębatym) lub użyj wpisywania ręcznego/kodu kreskowego, ponieważ analiza zdjęcia wymaga aktywnego połączenia AI.');
 
     const cleanBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
 
@@ -119,7 +119,7 @@ FORMAT ODPOWIEDZI (WYŁĄCZNIE TEN JSON, bez markdown):
         if (error.message.includes('429') || error.message.includes('Limit') || error.message.includes('rate')) {
           if (i < MODELS.length - 1) {
             _updateStatus(`${model} — limit. Próbuję ${MODELS[i + 1]}...`);
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, 1000));
             continue;
           }
         } else {
@@ -129,15 +129,8 @@ FORMAT ODPOWIEDZI (WYŁĄCZNIE TEN JSON, bez markdown):
       }
     }
 
-    // All models failed with 429 — last resort: wait and retry first model
-    _updateStatus('Wszystkie modele mają limit. Czekam 30s i próbuję ponownie...');
-    await new Promise(r => setTimeout(r, 30000));
-
-    try {
-      return await _makeRequest(apiKey, MODELS[0], body);
-    } catch (error) {
-      throw new Error('Limit API wyczerpany. Spróbuj ponownie za 1-2 minuty, lub utwórz nowy klucz API na nowym projekcie Google Cloud.');
-    }
+    // All models exhausted — don't retry, just inform the user
+    throw new Error('Limit API wyczerpany dla wszystkich modeli. Poczekaj 1-2 minuty i spróbuj ponownie.');
   }
 
   async function _makeRequest(apiKey, model, body) {
@@ -156,8 +149,8 @@ FORMAT ODPOWIEDZI (WYŁĄCZNIE TEN JSON, bez markdown):
 
       if (response.status === 429) {
         throw new Error(`429: Rate limit (${model})`);
-      } else if (response.status === 400 && apiMsg.includes('API_KEY_INVALID')) {
-        throw new Error('Nieprawidłowy klucz API. Sprawdź czy skopiowałeś cały klucz z Google AI Studio.');
+      } else if (response.status === 400 && (apiMsg.includes('API_KEY_INVALID') || apiMsg.includes('API key not valid') || apiMsg.includes('key not valid'))) {
+        throw new Error('Nieprawidłowy lub brakujący klucz API Gemini. Wpisz poprawny klucz w Ustawieniach konta (zakładka z kołem zębatym) lub spróbuj wpisać prostszą nazwę jedzenia (np. "jajko", "chleb", "masło"), aby wyszukać je bezpośrednio z naszej wbudowanej bazy danych (która nie wymaga klucza API).');
       } else if (response.status === 400) {
         throw new Error(`Błąd zapytania: ${apiMsg}`);
       } else if (response.status === 403) {

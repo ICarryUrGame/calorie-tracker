@@ -78,7 +78,7 @@ const UI = (() => {
   }
 
   // --- Meals List ---
-  function renderMealsList(meals, onDelete) {
+  function renderMealsList(meals, onDelete, onEdit) {
     const container = document.getElementById('meals-list');
     const countEl = document.getElementById('meals-count');
 
@@ -93,7 +93,7 @@ const UI = (() => {
             <i data-lucide="utensils" style="width:40px; height:40px; margin: 0 auto; opacity: 0.35"></i>
           </div>
           <div class="meals-empty__text" style="margin-top:12px">Brak posiłków na ten dzień<br>
-            <span class="text-muted text-xs">Dodaj posiłek tekstem lub zdjęciem</span>
+            <span class="text-muted text-xs">Dodaj posiłek tekstem, zdjęciem lub kodem kreskowym</span>
           </div>
         </div>
       `;
@@ -101,34 +101,52 @@ const UI = (() => {
       return;
     }
 
-    container.innerHTML = meals.map(meal => `
-      <div class="meal-card" data-meal-id="${meal.id}">
-        <div class="meal-card__header">
-          <div class="meal-card__time">
-            <i data-lucide="clock" style="width:14px; height:14px"></i>
-            <span>${meal.time}</span>
-            <span style="margin-left:4px; opacity:0.6; display:inline-flex">
-              ${meal.type === 'photo' ? '<i data-lucide="camera" style="width:14px; height:14px"></i>' : (meal.type === 'manual' ? '<i data-lucide="pen-tool" style="width:14px; height:14px"></i>' : '<i data-lucide="text-cursor" style="width:14px; height:14px"></i>')}
-            </span>
-          </div>
-          <div class="meal-card__calories">${meal.total.calories} kcal</div>
-        </div>
-        <div class="meal-card__items">
-          ${meal.items.map(item => `
-            <div class="meal-card__item">
-              <span class="meal-card__item-name">${item.name}</span>
-              <span class="meal-card__item-amount">${item.amount}</span>
-              <span class="meal-card__item-cal">${item.calories} kcal</span>
+    const validMeals = (meals || []).filter(m => m !== null && m !== undefined);
+    container.innerHTML = validMeals.map(meal => {
+      const t = meal.total || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      const items = meal.items || [];
+      const time = meal.time || '--:--';
+      
+      return `
+        <div class="meal-card" data-meal-id="${meal.id}">
+          <div class="meal-card__header">
+            <div class="meal-card__time">
+              <i data-lucide="clock" style="width:14px; height:14px"></i>
+              <span>${time}</span>
+              <span style="margin-left:4px; opacity:0.6; display:inline-flex">
+                ${meal.type === 'photo' ? '<i data-lucide="camera" style="width:14px; height:14px"></i>' : (meal.type === 'manual' ? '<i data-lucide="pen-tool" style="width:14px; height:14px"></i>' : (meal.type === 'barcode' ? '<i data-lucide="scan-barcode" style="width:14px; height:14px"></i>' : '<i data-lucide="text-cursor" style="width:14px; height:14px"></i>'))}
+              </span>
             </div>
-          `).join('')}
+            <div class="meal-card__calories">${t.calories || 0} kcal</div>
+          </div>
+          <div class="meal-card__items">
+            ${items.map(item => `
+              <div class="meal-card__item">
+                <span class="meal-card__item-name">${item.name || 'Brak nazwy'}</span>
+                <span class="meal-card__item-amount">${item.amount || '1 szt.'}</span>
+                <span class="meal-card__item-cal">${item.calories || 0} kcal</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="meal-card__footer" style="display:flex; justify-content:space-between; align-items:center">
+            <button class="meal-card__edit" data-edit-id="${meal.id}" style="background:none; border:none; color:var(--accent-green); font-size:0.75rem; display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-weight:600; padding:6px 0">
+              <i data-lucide="edit-3" style="width:14px; height:14px"></i> Edytuj
+            </button>
+            <button class="meal-card__delete" data-delete-id="${meal.id}">
+              <i data-lucide="trash" style="width:14px; height:14px"></i> Usuń
+            </button>
+          </div>
         </div>
-        <div class="meal-card__footer">
-          <button class="meal-card__delete" data-delete-id="${meal.id}">
-            <i data-lucide="trash" style="width:14px; height:14px"></i> Usuń
-          </button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
+
+    // Attach edit handlers
+    container.querySelectorAll('[data-edit-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.editId;
+        if (onEdit) onEdit(id);
+      });
+    });
 
     // Attach delete handlers
     container.querySelectorAll('[data-delete-id]').forEach(btn => {
@@ -143,35 +161,55 @@ const UI = (() => {
   }
 
   // --- AI Result Preview ---
-  function renderAIResult(result) {
+  function renderAIResult(result, prefix = 'text') {
     if (!result || !result.items) return '';
 
     return `
-      <div class="ai-result">
-        ${result.items.map(item => `
-          <div class="ai-result__item">
-            <div class="ai-result__item-info">
-              <div class="ai-result__item-name">${item.name}</div>
-              <div class="ai-result__item-amount">${item.amount}</div>
+      <div class="ai-result" data-prefix="${prefix}">
+        ${result.items.map((item, idx) => `
+          <div class="ai-result__item" data-index="${idx}" style="display:flex; flex-direction:column; gap:12px; background:var(--bg-glass); border:1px solid var(--border-glass); border-radius:12px; padding:14px; margin-bottom:12px; align-items:stretch">
+            <!-- First row: Name & Portion -->
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px">
+              <input type="text" class="ai-item-name-input" value="${item.name}" style="background:transparent; border:none; color:var(--text-primary); font-weight:700; font-size:1.05rem; width:55%; border-bottom:1px dashed transparent; outline:none; transition:border-color 0.2s" onfocus="this.style.borderBottomColor='var(--accent-green)'" onblur="this.style.borderBottomColor='transparent'">
+              <input type="text" class="ai-item-amount-input" value="${item.amount}" style="background:transparent; border:none; color:var(--text-secondary); font-size:0.85rem; text-align:right; width:40%; border-bottom:1px dashed transparent; outline:none; transition:border-color 0.2s" onfocus="this.style.borderBottomColor='var(--accent-green)'" onblur="this.style.borderBottomColor='transparent'">
             </div>
-            <div class="ai-result__item-cal">${item.calories} kcal</div>
+            
+            <!-- Second row: Clean aligned grid for nutrients -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; text-align:center; border-top:1px solid var(--border-glass); padding-top:10px">
+              <div style="display:flex; flex-direction:column; gap:4px">
+                <span style="font-size:0.68rem; color:var(--accent-green); font-weight:700; text-transform:uppercase; letter-spacing:0.02em">Kalorie</span>
+                <input type="number" class="ai-item-cal-input" value="${item.calories}" style="background:var(--bg-glass-strong); border:1px solid var(--border-glass); border-radius:6px; color:var(--accent-green); font-weight:800; font-size:0.9rem; width:100%; text-align:center; padding:6px 2px; outline:none; transition:border-color 0.2s, box-shadow 0.2s" onfocus="this.style.borderColor='var(--accent-green)';" onblur="this.style.borderColor='var(--border-glass)';">
+              </div>
+              <div style="display:flex; flex-direction:column; gap:4px">
+                <span style="font-size:0.68rem; color:var(--accent-blue); font-weight:700; text-transform:uppercase; letter-spacing:0.02em">Białko</span>
+                <input type="number" class="ai-item-protein-input" value="${item.protein}" style="background:var(--bg-glass-strong); border:1px solid var(--border-glass); border-radius:6px; color:var(--accent-blue); font-weight:800; font-size:0.9rem; width:100%; text-align:center; padding:6px 2px; outline:none; transition:border-color 0.2s, box-shadow 0.2s" onfocus="this.style.borderColor='var(--accent-blue)';" onblur="this.style.borderColor='var(--border-glass)';">
+              </div>
+              <div style="display:flex; flex-direction:column; gap:4px">
+                <span style="font-size:0.68rem; color:var(--accent-orange); font-weight:700; text-transform:uppercase; letter-spacing:0.02em">Węgle</span>
+                <input type="number" class="ai-item-carbs-input" value="${item.carbs}" style="background:var(--bg-glass-strong); border:1px solid var(--border-glass); border-radius:6px; color:var(--accent-orange); font-weight:800; font-size:0.9rem; width:100%; text-align:center; padding:6px 2px; outline:none; transition:border-color 0.2s, box-shadow 0.2s" onfocus="this.style.borderColor='var(--accent-orange)';" onblur="this.style.borderColor='var(--border-glass)';">
+              </div>
+              <div style="display:flex; flex-direction:column; gap:4px">
+                <span style="font-size:0.68rem; color:var(--accent-yellow); font-weight:700; text-transform:uppercase; letter-spacing:0.02em">Tłuszcze</span>
+                <input type="number" class="ai-item-fat-input" value="${item.fat}" style="background:var(--bg-glass-strong); border:1px solid var(--border-glass); border-radius:6px; color:var(--accent-yellow); font-weight:800; font-size:0.9rem; width:100%; text-align:center; padding:6px 2px; outline:none; transition:border-color 0.2s, box-shadow 0.2s" onfocus="this.style.borderColor='var(--accent-yellow)';" onblur="this.style.borderColor='var(--border-glass)';">
+              </div>
+            </div>
           </div>
         `).join('')}
         <div class="ai-result__total">
           <span class="ai-result__total-label">Razem</span>
-          <span class="ai-result__total-value">${result.total.calories} kcal</span>
+          <span class="ai-result__total-value" id="${prefix}-total-calories">${result.total.calories} kcal</span>
         </div>
         <div class="ai-result__macros">
           <div class="ai-result__macro">
-            <div class="ai-result__macro-value" style="color:var(--accent-blue)">${result.total.protein}g</div>
+            <div class="ai-result__macro-value" id="${prefix}-total-protein" style="color:var(--accent-blue)">${result.total.protein}g</div>
             <div class="ai-result__macro-label">Białko</div>
           </div>
           <div class="ai-result__macro">
-            <div class="ai-result__macro-value" style="color:var(--accent-orange)">${result.total.carbs}g</div>
+            <div class="ai-result__macro-value" id="${prefix}-total-carbs" style="color:var(--accent-orange)">${result.total.carbs}g</div>
             <div class="ai-result__macro-label">Węgle</div>
           </div>
           <div class="ai-result__macro">
-            <div class="ai-result__macro-value" style="color:var(--accent-yellow)">${result.total.fat}g</div>
+            <div class="ai-result__macro-value" id="${prefix}-total-fat" style="color:var(--accent-yellow)">${result.total.fat}g</div>
             <div class="ai-result__macro-label">Tłuszcze</div>
           </div>
         </div>
@@ -620,6 +658,98 @@ const UI = (() => {
     if (loader) loader.classList.add('hidden');
   }
 
+  // --- Monthly Calendar Grid ---
+  function renderMonthlyCalendar(year, month, selectedDate, onDayClick) {
+    const grid = document.getElementById('calendar-month-grid');
+    const label = document.getElementById('calendar-month-label');
+    if (!grid || !label) return;
+
+    const monthNames = [
+      'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'
+    ];
+
+    label.textContent = `${monthNames[month]} ${year}`;
+
+    // Get first day of the month and total days
+    const firstDay = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+
+    // Adjust first day (Monday as first day of week index 0)
+    const offset = firstDay === 0 ? 6 : firstDay - 1;
+
+    let html = '';
+
+    // Empty offset days
+    for (let i = 0; i < offset; i++) {
+      html += `<div class="calendar-month-day empty-day"></div>`;
+    }
+
+    const goal = AppStorage.getDailyGoal();
+    const today = new Date();
+
+    // Month days
+    for (let day = 1; day <= totalDays; day++) {
+      const d = new Date(year, month, day);
+      const summary = AppStorage.getDaySummary(d);
+      const kcal = summary.totals.calories;
+      
+      const isActive = _isSameDay(d, selectedDate);
+      
+      let targetClass = '';
+      let kcalText = '';
+      let streakClass = '';
+      
+      if (kcal > 0) {
+        kcalText = `${kcal} kcal`;
+        const pct = goal > 0 ? kcal / goal : 0;
+        if (kcal <= goal) {
+          streakClass = 'streak-border';
+          if (pct <= 0.5) targetClass = 'heat-1';
+          else if (pct <= 0.8) targetClass = 'heat-2';
+          else if (pct <= 0.95) targetClass = 'heat-3';
+          else targetClass = 'heat-4';
+        } else {
+          targetClass = 'heat-over';
+        }
+      }
+
+      const activeClass = isActive ? 'active-day' : '';
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+      html += `
+        <div class="calendar-month-day ${targetClass} ${streakClass} ${activeClass}" data-date="${dateStr}">
+          <span class="calendar-month-day__num">${day}</span>
+          <span class="calendar-month-day__kcal">${kcalText}</span>
+        </div>
+      `;
+    }
+
+    grid.innerHTML = html;
+
+    // Attach click events
+    grid.querySelectorAll('.calendar-month-day:not(.empty-day)').forEach(el => {
+      el.addEventListener('click', () => {
+        const date = el.dataset.date;
+        if (onDayClick) onDayClick(date);
+      });
+    });
+  }
+
+  // --- Streak UI ---
+  function updateStreak(streak) {
+    const badge = document.getElementById('streak-badge');
+    const count = document.getElementById('streak-count');
+    if (!badge || !count) return;
+
+    if (streak > 0) {
+      count.textContent = streak;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+
   function _isSameDay(d1, d2) {
     return d1.getFullYear() === d2.getFullYear() &&
            d1.getMonth() === d2.getMonth() &&
@@ -644,6 +774,300 @@ const UI = (() => {
     renderWeightHistory,
     renderFavoritesList,
     renderCalendarStrip,
-    renderSearchMatches
+    renderSearchMatches,
+    renderMonthlyCalendar,
+    updateStreak,
+    renderMonthSummary,
+    renderWeeklyReport,
+    renderWaterTracker,
+    renderIFWidget,
+    renderBMICard,
+    renderAchievements
   };
+  
+  function renderMonthSummary(year, month) {
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    let sumKcal = 0;
+    let daysWithMeals = 0;
+    let daysNormal = 0;
+    let daysOver = 0;
+    const goal = AppStorage.getDailyGoal();
+
+    for (let day = 1; day <= totalDays; day++) {
+      const d = new Date(year, month, day);
+      const summary = AppStorage.getDaySummary(d);
+      const kcal = summary.totals.calories;
+      if (kcal > 0) {
+        sumKcal += kcal;
+        daysWithMeals++;
+        if (kcal <= goal) daysNormal++;
+        else daysOver++;
+      }
+    }
+
+    const avgKcal = daysWithMeals > 0 ? Math.round(sumKcal / daysWithMeals) : 0;
+
+    let prevYear = year;
+    let prevMonth = month - 1;
+    if (prevMonth < 0) {
+      prevMonth = 11;
+      prevYear--;
+    }
+    const prevTotalDays = new Date(prevYear, prevMonth + 1, 0).getDate();
+    let prevSumKcal = 0;
+    let prevDaysWithMeals = 0;
+    for (let day = 1; day <= prevTotalDays; day++) {
+      const d = new Date(prevYear, prevMonth, day);
+      const summary = AppStorage.getDaySummary(d);
+      const kcal = summary.totals.calories;
+      if (kcal > 0) {
+        prevSumKcal += kcal;
+        prevDaysWithMeals++;
+      }
+    }
+    const prevAvgKcal = prevDaysWithMeals > 0 ? Math.round(prevSumKcal / prevDaysWithMeals) : 0;
+
+    let vsPrevText = '—';
+    if (avgKcal > 0 && prevAvgKcal > 0) {
+      const diff = avgKcal - prevAvgKcal;
+      const pct = Math.round((diff / prevAvgKcal) * 100);
+      if (pct > 0) vsPrevText = `+${pct}% vs poprz.`;
+      else if (pct < 0) vsPrevText = `${pct}% vs poprz.`;
+      else vsPrevText = 'bez zmian';
+    }
+
+    const avgEl = document.getElementById('month-avg-kcal');
+    const normalEl = document.getElementById('month-days-normal');
+    const overEl = document.getElementById('month-days-over');
+    const vsPrevEl = document.getElementById('month-vs-prev');
+
+    if (avgEl) avgEl.textContent = `${avgKcal} kcal`;
+    if (normalEl) normalEl.textContent = `${daysNormal} dni`;
+    if (overEl) overEl.textContent = `${daysOver} dni`;
+    if (vsPrevEl) vsPrevEl.textContent = vsPrevText;
+  }
+
+  function renderWeeklyReport() {
+    const today = new Date();
+    let sumKcal = 0;
+    let daysWithMeals = 0;
+    let daysNormal = 0;
+    const goal = AppStorage.getDailyGoal();
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const summary = AppStorage.getDaySummary(d);
+      const kcal = summary.totals.calories;
+      if (kcal > 0) {
+        sumKcal += kcal;
+        daysWithMeals++;
+        if (kcal <= goal) daysNormal++;
+      }
+    }
+
+    const avgKcal = daysWithMeals > 0 ? Math.round(sumKcal / daysWithMeals) : 0;
+
+    const avgEl = document.getElementById('week-avg-kcal');
+    const goalEl = document.getElementById('week-days-goal');
+
+    if (avgEl) avgEl.textContent = `${avgKcal} kcal`;
+    if (goalEl) goalEl.textContent = `${daysNormal} dni`;
+  }
+
+  function renderWaterTracker(current, goal) {
+    const container = document.getElementById('water-cups-container');
+    const currentEl = document.getElementById('water-current');
+    const goalEl = document.getElementById('water-goal-val');
+
+    if (currentEl) currentEl.textContent = current;
+    if (goalEl) goalEl.textContent = goal;
+
+    if (!container) return;
+
+    let html = '';
+    for (let i = 0; i < goal; i++) {
+      const isFilled = i < current;
+      html += `<span class="water-cup" style="cursor:pointer; opacity: ${isFilled ? 1 : 0.25}; margin-right:4px">💧</span>`;
+    }
+    container.innerHTML = html;
+  }
+
+  function renderIFWidget() {
+    const fastingWidget = document.getElementById('fasting-widget');
+    const ifSettings = AppStorage.getIFSettings();
+    const ifProtocolVal = document.getElementById('if-protocol-val');
+    const ifTimer = document.getElementById('if-timer');
+    const ifTimerLabel = document.getElementById('if-timer-label');
+    const ifStatusBadge = document.getElementById('if-status-badge');
+    const ifStartTime = document.getElementById('if-start-time');
+
+    if (!fastingWidget) return;
+
+    if (!ifSettings.enabled) {
+      fastingWidget.classList.add('hidden');
+      return;
+    }
+
+    fastingWidget.classList.remove('hidden');
+    if (ifProtocolVal) ifProtocolVal.textContent = ifSettings.protocol;
+
+    const [fastHours, eatHours] = ifSettings.protocol.split(':').map(Number);
+    const startHour = ifSettings.startHour;
+
+    if (ifStartTime) ifStartTime.textContent = `${String(startHour).padStart(2, '0')}:00`;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+
+    const fastStartHour = (startHour + eatHours) % 24;
+    
+    let isEating = false;
+    if (startHour + eatHours <= 24) {
+      isEating = currentHour >= startHour && currentHour < (startHour + eatHours);
+    } else {
+      isEating = currentHour >= startHour || currentHour < ((startHour + eatHours) % 24);
+    }
+
+    let diffSeconds = 0;
+    if (isEating) {
+      if (ifStatusBadge) {
+        ifStatusBadge.textContent = 'Okno jedzenia';
+        ifStatusBadge.style.background = 'var(--accent-green-dim)';
+        ifStatusBadge.style.color = 'var(--accent-green)';
+      }
+      if (ifTimerLabel) ifTimerLabel.textContent = 'do końca okna jedzenia';
+      
+      let target = new Date();
+      target.setHours(fastStartHour, 0, 0, 0);
+      if (target < now) target.setDate(target.getDate() + 1);
+      diffSeconds = Math.floor((target - now) / 1000);
+    } else {
+      if (ifStatusBadge) {
+        ifStatusBadge.textContent = 'Okno postu';
+        ifStatusBadge.style.background = 'var(--accent-purple-dim)';
+        ifStatusBadge.style.color = 'var(--accent-purple)';
+      }
+      if (ifTimerLabel) ifTimerLabel.textContent = 'do końca postu';
+
+      let target = new Date();
+      target.setHours(startHour, 0, 0, 0);
+      if (target < now) target.setDate(target.getDate() + 1);
+      diffSeconds = Math.floor((target - now) / 1000);
+    }
+
+    if (diffSeconds < 0) diffSeconds = 0;
+
+    const hours = Math.floor(diffSeconds / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+    const seconds = diffSeconds % 60;
+
+    if (ifTimer) {
+      ifTimer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+  }
+
+  function renderBMICard(weight, height) {
+    const bmiValEl = document.getElementById('bmi-value');
+    const bmiCatEl = document.getElementById('bmi-category');
+    const bmiPointer = document.getElementById('bmi-scale-pointer');
+
+    if (!weight || !height || height <= 0) {
+      if (bmiValEl) bmiValEl.textContent = '--.-';
+      if (bmiCatEl) bmiCatEl.textContent = 'Brak danych';
+      if (bmiPointer) bmiPointer.style.left = '0%';
+      return;
+    }
+
+    const bmi = (weight / ((height / 100) * (height / 100))).toFixed(1);
+    if (bmiValEl) bmiValEl.textContent = bmi;
+
+    let category = 'Prawidłowa';
+    let color = 'var(--accent-green)';
+    let percentage = 40;
+
+    if (bmi < 18.5) {
+      category = 'Niedowaga';
+      color = 'var(--accent-blue)';
+      percentage = Math.max(5, (bmi / 18.5) * 25);
+    } else if (bmi < 25.0) {
+      category = 'Prawidłowa waga';
+      color = 'var(--accent-green)';
+      percentage = 25 + ((bmi - 18.5) / 6.5) * 25;
+    } else if (bmi < 30.0) {
+      category = 'Nadwaga';
+      color = 'var(--accent-orange)';
+      percentage = 50 + ((bmi - 25.0) / 5.0) * 25;
+    } else {
+      category = 'Otyłość';
+      color = 'var(--accent-red)';
+      percentage = Math.min(95, 75 + ((bmi - 30.0) / 10.0) * 20);
+    }
+
+    if (bmiCatEl) {
+      bmiCatEl.textContent = category;
+      bmiCatEl.style.color = color;
+    }
+    if (bmiPointer) {
+      bmiPointer.style.left = `${percentage}%`;
+    }
+  }
+
+  function renderAchievements() {
+    const gam = Gamification.getGamificationData();
+    const info = Gamification.getLevelInfo(gam.xp);
+
+    const levelEl = document.getElementById('gam-level');
+    const xpEl = document.getElementById('gam-xp');
+    const xpFill = document.getElementById('gam-xp-fill');
+    const nextLevelEl = document.getElementById('gam-next-level');
+
+    if (levelEl) levelEl.textContent = info.level;
+    if (xpEl) xpEl.textContent = gam.xp;
+    if (xpFill) xpFill.style.width = `${info.progress * 100}%`;
+    if (nextLevelEl) nextLevelEl.textContent = `Do następnego poziomu: ${info.nextThreshold - gam.xp} XP`;
+
+    const dashLevel = document.getElementById('dash-level');
+    const dashXpFill = document.getElementById('dash-xp-fill');
+    const dashXpTxt = document.getElementById('dash-xp-txt');
+    if (dashLevel) dashLevel.textContent = info.level;
+    if (dashXpFill) dashXpFill.style.width = `${info.progress * 100}%`;
+    if (dashXpTxt) dashXpTxt.textContent = `${gam.xp} XP`;
+
+    const badges = Gamification.getAllBadges();
+    const badgesGrid = document.getElementById('badges-grid');
+    if (badgesGrid) {
+      badgesGrid.innerHTML = badges.map(b => `
+        <div class="badge-card ${b.unlocked ? 'unlocked' : 'locked'}" title="${b.desc}">
+          <div class="badge-card__icon">${b.unlocked ? b.icon : '🔒'}</div>
+          <div class="badge-card__name">${b.name}</div>
+          <div class="badge-card__desc">${b.desc}</div>
+        </div>
+      `).join('');
+    }
+
+    const challenges = Gamification.getActiveChallenges();
+    const challengesList = document.getElementById('challenges-list');
+    if (challengesList) {
+      challengesList.innerHTML = challenges.map(ch => {
+        const pct = Math.round((ch.progress / ch.target) * 100);
+        return `
+          <div class="challenge-card ${ch.completed ? 'completed' : ''}">
+            <div class="challenge-card__icon">${ch.icon}</div>
+            <div class="challenge-card__info">
+              <div class="challenge-card__name">${ch.name}</div>
+              <div class="challenge-card__desc">${ch.desc}</div>
+              <div class="challenge-card__progress-container">
+                <div class="challenge-card__progress-bar">
+                  <div class="challenge-card__progress-fill" style="width: ${pct}%"></div>
+                </div>
+                <div class="text-xs text-muted" style="margin-left:8px; white-space:nowrap">${ch.progress} / ${ch.target}</div>
+              </div>
+            </div>
+            <div class="challenge-card__reward">+${ch.xpReward} XP</div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
 })();

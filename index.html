@@ -8,9 +8,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>CalorieAI — Inteligentny Licznik Kalorii</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=18">
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <!-- Toast Container -->
@@ -97,11 +99,26 @@
             <h2 style="font-size:1.45rem; font-weight:900; letter-spacing:-0.03em;">Calorie<span style="color:var(--accent-green)">AI</span></h2>
           </div>
           <div style="display:flex; align-items:center; gap:10px">
+            <div id="streak-badge" class="streak-badge hidden">
+              <span class="streak-badge__icon">🔥</span>
+              <span class="streak-badge__count" id="streak-count">0</span>
+            </div>
             <span class="header__username" id="display-username">Gość</span>
             <button class="btn btn--secondary btn--sm" id="btn-logout" style="padding: 8px 14px; font-size: 0.8rem; border-radius: var(--radius-sm)">
               <i data-lucide="log-out" style="width:14px; height:14px"></i>
             </button>
           </div>
+        </div>
+        <!-- XP Progress Mini bar on Dashboard -->
+        <div class="xp-mini-bar-container" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:-8px; margin-bottom:12px; padding:0 8px">
+          <div class="text-xs text-muted" style="display:flex; align-items:center; gap:4px">
+            <i data-lucide="award" style="width:12px; height:12px; color:var(--accent-yellow)"></i>
+            <span>Poziom <strong id="dash-level" style="color:var(--text-primary)">1</strong></span>
+          </div>
+          <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden">
+            <div id="dash-xp-fill" style="width:0%; height:100%; background:var(--accent-yellow); box-shadow:0 0 5px var(--accent-yellow); transition: width 0.4s ease"></div>
+          </div>
+          <div class="text-xs text-muted" id="dash-xp-txt">0 XP</div>
         </div>
 
         <!-- Date Navigation -->
@@ -177,13 +194,25 @@
           </div>
         </div>
 
-        <!-- Action Buttons (3 Columns layout) -->
-        <div class="action-buttons" style="grid-template-columns: repeat(3, 1fr)">
+        <!-- Action Buttons (5 Columns layout) -->
+        <div class="action-buttons" style="grid-template-columns: repeat(5, 1fr)">
           <button class="action-btn" id="btn-add-text">
             <div class="action-btn__icon action-btn__icon--text">
               <i data-lucide="text-cursor" style="width: 22px; height: 22px"></i>
             </div>
             <span>Wyszukaj / AI</span>
+          </button>
+          <button class="action-btn" id="btn-add-photo">
+            <div class="action-btn__icon" style="background:rgba(168,85,247,0.15); color:#a855f7">
+              <i data-lucide="camera" style="width: 22px; height: 22px"></i>
+            </div>
+            <span>Zdjęcie</span>
+          </button>
+          <button class="action-btn" id="btn-add-barcode">
+            <div class="action-btn__icon" style="background:rgba(61,139,255,0.15); color:var(--accent-blue)">
+              <i data-lucide="scan-barcode" style="width: 22px; height: 22px"></i>
+            </div>
+            <span>Skaner</span>
           </button>
           <button class="action-btn" id="btn-add-manual">
             <div class="action-btn__icon action-btn__icon--manual">
@@ -197,6 +226,17 @@
             </div>
             <span>Ulubione</span>
           </button>
+        </div>
+
+        <!-- Weekly Report Card -->
+        <div class="glass-card mb-16 glass-card--no-hover weekly-report-card" style="padding:14px">
+          <h3 class="mb-8" style="font-size:0.9rem; display:flex; align-items:center; gap:6px">
+            <i data-lucide="bar-chart-3" style="width:16px; height:16px; color:var(--accent-green)"></i> Raport tygodniowy
+          </h3>
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <div style="font-size:0.75rem; color:var(--text-secondary)">Średnia z 7 dni: <strong id="week-avg-kcal" style="color:var(--text-primary)">0 kcal</strong></div>
+            <div style="font-size:0.75rem; color:var(--text-secondary)">Dni w limicie: <strong id="week-days-goal" style="color:var(--accent-green)">0 dni</strong></div>
+          </div>
         </div>
 
         <!-- Meals List -->
@@ -216,15 +256,144 @@
         </div>
       </div>
 
-      <!-- === HISTORY VIEW === -->
-      <div id="view-history" class="view">
+      <!-- === STATS VIEW (CHARTS & ANALYTICS) === -->
+      <div id="view-stats" class="view">
         <div class="header">
           <div class="header__title">
-            <i data-lucide="calendar" style="color:var(--accent-green); width: 28px; height: 28px"></i>
-            <h1 style="font-size:1.5rem; margin-left: 8px">Historia spożycia</h1>
+            <i data-lucide="bar-chart-2" style="color:var(--accent-green); width: 28px; height: 28px"></i>
+            <h1 style="font-size:1.5rem; margin-left: 8px">Statystyki</h1>
           </div>
         </div>
-        <div id="history-list" class="history-list"></div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px">
+          <div class="glass-card glass-card--no-hover" style="padding:10px; text-align:center">
+            <div class="text-xs text-muted" style="margin-bottom:2px">Średnie kalorie</div>
+            <div style="font-size:1.15rem; font-weight:800; color:var(--accent-green)" id="stats-avg-cal">0 kcal</div>
+          </div>
+          <div class="glass-card glass-card--no-hover" style="padding:10px; text-align:center">
+            <div class="text-xs text-muted" style="margin-bottom:2px">Dni w limicie</div>
+            <div style="font-size:1.15rem; font-weight:800; color:var(--accent-cyan)" id="stats-days-goal">0 / 0</div>
+          </div>
+        </div>
+
+        <!-- Weight Chart Card -->
+        <div class="glass-card mb-16 glass-card--no-hover">
+          <h3 class="mb-12" style="font-size:0.9rem; display:flex; align-items:center; gap:8px">
+            <i data-lucide="scale" style="width:16px; height:16px; color:var(--accent-purple)"></i> Trend wagi i cel
+          </h3>
+          <div style="position:relative; height:180px">
+            <canvas id="chart-weight"></canvas>
+          </div>
+        </div>
+
+        <!-- Calories Chart Card -->
+        <div class="glass-card mb-16 glass-card--no-hover">
+          <h3 class="mb-12" style="font-size:0.9rem; display:flex; align-items:center; gap:8px">
+            <i data-lucide="flame" style="width:16px; height:16px; color:var(--accent-green)"></i> Kalorie (ostatnie 7 dni)
+          </h3>
+          <div style="position:relative; height:180px">
+            <canvas id="chart-calories"></canvas>
+          </div>
+        </div>
+
+        <!-- Macros Chart Card -->
+        <div class="glass-card mb-24 glass-card--no-hover">
+          <h3 class="mb-12" style="font-size:0.9rem; display:flex; align-items:center; gap:8px">
+            <i data-lucide="pie-chart" style="width:16px; height:16px; color:var(--accent-orange)"></i> Rozkład makroskładników
+          </h3>
+          <div style="position:relative; height:150px">
+            <canvas id="chart-macros"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- === CALENDAR VIEW (MONTHLY GRID) === -->
+      <div id="view-calendar" class="view">
+        <div class="header">
+          <div class="header__title">
+            <i data-lucide="calendar-days" style="color:var(--accent-green); width: 28px; height: 28px"></i>
+            <h1 style="font-size:1.5rem; margin-left: 8px">Kalendarz</h1>
+          </div>
+        </div>
+
+        <!-- Month Navigation Header -->
+        <div class="date-nav mb-16">
+          <button class="date-nav__btn" id="calendar-prev-month" aria-label="Poprzedni miesiąc">
+            <i data-lucide="chevron-left" style="width:20px; height:20px"></i>
+          </button>
+          <div style="text-align:center">
+            <div class="date-nav__label" id="calendar-month-label">Lipiec 2026</div>
+          </div>
+          <button class="date-nav__btn" id="calendar-next-month" aria-label="Następny miesiąc">
+            <i data-lucide="chevron-right" style="width:20px; height:20px"></i>
+          </button>
+        </div>
+
+        <!-- Weekly Days Label -->
+        <div class="calendar-weeks-header" style="display:grid; grid-template-columns:repeat(7, 1fr); text-align:center; font-size:0.7rem; font-weight:700; color:var(--text-secondary); margin-bottom:8px; text-transform:uppercase">
+          <div>Pn</div><div>Wt</div><div>Śr</div><div>Cz</div><div>Pt</div><div>So</div><div>Nd</div>
+        </div>
+
+        <!-- Monthly Grid -->
+        <div id="calendar-month-grid" class="calendar-month-grid"></div>
+
+        <!-- Month Summary Section -->
+        <div class="glass-card mt-16 mb-16 glass-card--no-hover month-summary" style="padding:14px">
+          <h3 class="mb-12" style="font-size:0.95rem">📊 Podsumowanie miesiąca</h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+            <div style="font-size:0.75rem; color:var(--text-secondary)">Średnie kalorie: <strong id="month-avg-kcal" style="color:var(--text-primary)">0 kcal</strong></div>
+            <div style="font-size:0.75rem; color:var(--text-secondary)">Dni w normie: <strong id="month-days-normal" style="color:var(--accent-green)">0 dni</strong></div>
+            <div style="font-size:0.75rem; color:var(--text-secondary)">Dni przekroczone: <strong id="month-days-over" style="color:var(--accent-red)">0 dni</strong></div>
+            <div style="font-size:0.75rem; color:var(--text-secondary)">Porównanie z poprz.: <strong id="month-vs-prev" style="color:var(--text-primary)">—</strong></div>
+          </div>
+        </div>
+
+        <!-- Connected History List -->
+        <div class="meals-section">
+          <div class="meals-section__header">
+            <h3 class="meals-section__title">Historia dni</h3>
+          </div>
+          <div id="history-list" class="history-list"></div>
+        </div>
+      </div>
+
+      <!-- === ACHIEVEMENTS VIEW (GAMIFICATION) === -->
+      <div id="view-achievements" class="view">
+        <div class="header">
+          <div class="header__title">
+            <i data-lucide="trophy" style="color:var(--accent-yellow); width: 28px; height: 28px"></i>
+            <h1 style="font-size:1.5rem; margin-left: 8px">Osiągnięcia</h1>
+          </div>
+        </div>
+
+        <!-- Level Progress Card -->
+        <div class="glass-card mb-16 glass-card--no-hover" style="border-left: 4px solid var(--accent-yellow); padding:16px">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+            <div style="font-size:1.15rem; font-weight:800">Poziom <span id="gam-level" style="color:var(--accent-yellow)">1</span></div>
+            <div class="text-xs text-muted"><span id="gam-xp">0</span> XP</div>
+          </div>
+          <!-- XP Bar -->
+          <div class="xp-bar-container" style="height:10px; background:rgba(255,255,255,0.05); border-radius:5px; overflow:hidden">
+            <div id="gam-xp-fill" style="width:0%; height:100%; background:var(--accent-yellow); box-shadow:0 0 10px var(--accent-yellow); transition: width 0.4s ease"></div>
+          </div>
+          <div class="text-xs text-muted mt-8" id="gam-next-level">Do następnego poziomu: 100 XP</div>
+        </div>
+
+        <!-- Weekly Challenges Section -->
+        <div class="meals-section mb-16">
+          <h3 class="meals-section__title mb-12">Wyzwania tygodniowe</h3>
+          <div id="challenges-list" style="display:flex; flex-direction:column; gap:8px">
+            <!-- Active challenges -->
+          </div>
+        </div>
+
+        <!-- Badges Section -->
+        <div class="meals-section">
+          <h3 class="meals-section__title mb-12">Odznaki i Medale</h3>
+          <div id="badges-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px">
+            <!-- Badges -->
+          </div>
+        </div>
       </div>
 
       <!-- === WEIGHT VIEW === -->
@@ -245,6 +414,30 @@
             </div>
           </div>
           <p class="text-xs text-muted">Każdy pomiar wagi zostanie zapisany z dokładną godziną. Aktualna waga na bieżąco wpływa na cel BMR.</p>
+        </div>
+
+        <!-- BMI Card -->
+        <div class="glass-card mb-24 glass-card--no-hover bmi-card" style="padding:16px" id="bmi-widget-card">
+          <h3 style="font-size:1rem; display:flex; align-items:center; gap:8px; margin-bottom:12px">
+            <i data-lucide="activity" style="width:18px; height:18px; color:var(--accent-green)"></i> Twój wskaźnik BMI
+          </h3>
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <div>
+              <div style="font-size:1.6rem; font-weight:900" id="bmi-value">--.-</div>
+              <div style="font-size:0.8rem; font-weight:700; color:var(--text-secondary)" id="bmi-category">Brak danych</div>
+            </div>
+            <!-- Slider representation -->
+            <div style="flex:1; margin-left:24px; display:flex; flex-direction:column; gap:4px">
+              <div style="height:6px; background:linear-gradient(to right, #3d8bff, #00f076, #ff9100, #ff4a5a); border-radius:3px; position:relative" id="bmi-scale">
+                <div id="bmi-scale-pointer" style="width:12px; height:12px; border-radius:50%; background:#fff; border:2px solid var(--bg-primary); position:absolute; top:-3px; left:0%; transition: left 0.3s ease"></div>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:var(--text-secondary)">
+                <span>18.5</span>
+                <span>25.0</span>
+                <span>30.0</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="meals-section">
@@ -284,8 +477,31 @@
             </div>
           </div>
 
-          <button class="btn btn--purple btn--full mb-24" id="btn-recalculate-goals">
-            🔄 Przelicz zapotrzebowanie (BMR)
+          <div class="settings-item mb-12">
+            <span class="settings-item__label">Ile ćwiczysz w tygodniu?</span>
+            <select id="setting-exercise-days" class="settings-item__input" style="width: 160px; background:var(--bg-glass-strong); color:var(--text-primary); border:1px solid var(--border-glass)">
+              <option value="0">Brak treningów</option>
+              <option value="1-3">1-3 razy w tygodniu</option>
+              <option value="3-5">3-5 razy w tygodniu</option>
+              <option value="6-7">6-7 razy w tygodniu</option>
+            </select>
+          </div>
+
+          <div class="settings-item mb-12">
+            <span class="settings-item__label">Tryb życia w ciągu dnia</span>
+            <select id="setting-active-lifestyle" class="settings-item__input" style="width: 160px; background:var(--bg-glass-strong); color:var(--text-primary); border:1px solid var(--border-glass)">
+              <option value="sedentary">Siedzący</option>
+              <option value="active">Aktywny (stojący/ruch)</option>
+            </select>
+          </div>
+
+          <div class="settings-item mb-12" style="display:flex; justify-content:space-between; align-items:center">
+            <span class="settings-item__label">Wpisuj cele kaloryczne ręcznie</span>
+            <input type="checkbox" id="setting-manual-goals" style="width:20px; height:20px; accent-color:var(--accent-green)">
+          </div>
+
+          <button class="btn btn--primary btn--full mb-24" id="btn-recalculate-goals">
+            💾 Zapisz dane i przelicz cele BMR
           </button>
 
           <div class="settings-section__title">Ręczne Cele makro</div>
@@ -325,15 +541,32 @@
 
         <div class="settings-section">
           <div class="settings-section__title">Klucz AI (Opcjonalny)</div>
-          <div class="settings-item">
-            <span class="settings-item__label">
-              <i data-lucide="key-round" style="width:16px; height:16px; color:var(--accent-purple); vertical-align:middle; margin-right:8px"></i>
-              Gemini API Key
-            </span>
-            <div class="settings-item__value">
-              <input type="password" id="setting-api-key" class="settings-item__input" style="width:160px" data-masked="true">
+          <div class="settings-item" style="flex-direction:column; align-items:stretch; gap:10px">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <span class="settings-item__label" style="display:inline-flex; align-items:center">
+                <i data-lucide="key-round" style="width:16px; height:16px; color:var(--accent-purple); margin-right:8px"></i>
+                Gemini API Key
+              </span>
+              <div class="settings-item__value">
+                <input type="password" id="setting-api-key" class="settings-item__input" style="width:160px" data-masked="true">
+              </div>
+            </div>
+            <div class="text-xs text-muted" style="line-height:1.45; border-top:1px solid var(--border-glass); padding-top:10px; margin-top:4px">
+              <strong style="color:var(--text-primary)">🔑 Jak uzyskać darmowy klucz API?</strong><br>
+              1. Wejdź na stronę <a href="https://aistudio.google.com/" target="_blank" style="color:var(--accent-green); text-decoration:underline; font-weight:600">Google AI Studio</a> i zaloguj się kontem Google.<br>
+              2. Kliknij niebieski przycisk <strong>"Get API key"</strong> w lewym górnym rogu.<br>
+              3. Wybierz <strong>"Create API key"</strong>, skopiuj wygenerowany ciąg znaków i wklej go powyżej.
             </div>
           </div>
+        </div>
+
+
+        <div class="settings-section">
+          <div class="settings-section__title">Wygląd i eksport danych</div>
+          <button class="btn btn--secondary btn--full" id="btn-export-csv" style="border-color:var(--border-glass)">
+            <i data-lucide="download"></i>
+            <span>Pobierz historię (CSV)</span>
+          </button>
         </div>
 
         <div class="settings-section">
@@ -354,33 +587,94 @@
 
   <!-- ========== BOTTOM NAVIGATION ========== -->
   <nav class="bottom-nav hidden">
-    <div class="bottom-nav__inner">
+    <div class="bottom-nav__inner" style="grid-template-columns: repeat(6, 1fr)">
       <button class="bottom-nav__item active" data-view="view-dashboard">
         <span class="bottom-nav__icon">
-          <i data-lucide="home" style="width: 20px; height: 20px"></i>
+          <i data-lucide="home" style="width: 18px; height: 18px"></i>
         </span>
         <span>Główna</span>
       </button>
       <button class="bottom-nav__item" data-view="view-weight">
         <span class="bottom-nav__icon">
-          <i data-lucide="scale" style="width: 20px; height: 20px"></i>
+          <i data-lucide="scale" style="width: 18px; height: 18px"></i>
         </span>
         <span>Waga</span>
       </button>
-      <button class="bottom-nav__item" data-view="view-history">
+      <button class="bottom-nav__item" data-view="view-stats">
         <span class="bottom-nav__icon">
-          <i data-lucide="calendar" style="width: 20px; height: 20px"></i>
+          <i data-lucide="bar-chart-2" style="width: 18px; height: 18px"></i>
         </span>
-        <span>Historia</span>
+        <span>Wykresy</span>
+      </button>
+      <button class="bottom-nav__item" data-view="view-calendar">
+        <span class="bottom-nav__icon">
+          <i data-lucide="calendar" style="width: 18px; height: 18px"></i>
+        </span>
+        <span>Kalendarz</span>
+      </button>
+      <button class="bottom-nav__item" data-view="view-achievements">
+        <span class="bottom-nav__icon">
+          <i data-lucide="trophy" style="width: 18px; height: 18px"></i>
+        </span>
+        <span>Odznaki</span>
       </button>
       <button class="bottom-nav__item" data-view="view-settings">
         <span class="bottom-nav__icon">
-          <i data-lucide="sliders" style="width: 20px; height: 20px"></i>
+          <i data-lucide="sliders" style="width: 18px; height: 18px"></i>
         </span>
         <span>Profil</span>
       </button>
     </div>
   </nav>
+
+  <!-- ========== MONTH PICKER MODAL ========== -->
+  <div id="month-picker-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal__handle"></div>
+      <div class="modal__header">
+        <h2 class="modal__title">📅 Wybierz miesiąc i rok</h2>
+        <button class="modal__close" id="month-picker-close">
+          <i data-lucide="x" style="width:18px; height:18px"></i>
+        </button>
+      </div>
+
+      <div class="input-group mb-16">
+        <label for="month-picker-select">Miesiąc</label>
+        <select id="month-picker-select" class="input" style="background:var(--bg-glass-strong); color:var(--text-primary); border:1px solid var(--border-glass)">
+          <option value="0">Styczeń</option>
+          <option value="1">Luty</option>
+          <option value="2">Marzec</option>
+          <option value="3">Kwiecień</option>
+          <option value="4">Maj</option>
+          <option value="5">Czerwiec</option>
+          <option value="6">Lipiec</option>
+          <option value="7">Sierpień</option>
+          <option value="8">Wrzesień</option>
+          <option value="9">Październik</option>
+          <option value="10">Listopad</option>
+          <option value="11">Grudzień</option>
+        </select>
+      </div>
+
+      <div class="input-group mb-24">
+        <label for="year-picker-select">Rok</label>
+        <select id="year-picker-select" class="input" style="background:var(--bg-glass-strong); color:var(--text-primary); border:1px solid var(--border-glass)">
+          <option value="2024">2024</option>
+          <option value="2025">2025</option>
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+          <option value="2028">2028</option>
+          <option value="2029">2029</option>
+          <option value="2030">2030</option>
+        </select>
+      </div>
+
+      <button class="btn btn--primary btn--full" id="btn-submit-month-picker">
+        <i data-lucide="check"></i>
+        <span>Wybierz</span>
+      </button>
+    </div>
+  </div>
 
   <!-- ========== TEXT SEARCH / ANALYSIS MODAL ========== -->
   <div id="text-modal" class="modal-overlay">
@@ -507,11 +801,124 @@
     </div>
   </div>
 
+  <!-- ========== PHOTO ANALYSIS MODAL ========== -->
+  <div id="photo-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal__handle"></div>
+      <div class="modal__header">
+        <h2 class="modal__title">📷 Analizuj zdjęcie posiłku</h2>
+        <button class="modal__close" id="photo-modal-close">
+          <i data-lucide="x" style="width:18px; height:18px"></i>
+        </button>
+      </div>
+
+      <!-- Upload area -->
+      <div id="photo-upload-area" class="mb-16" style="border: 2px dashed var(--border-glass); border-radius: var(--radius-md); padding: 24px; text-align: center; cursor: pointer; transition: border-color 0.2s">
+        <i data-lucide="image-plus" style="width: 40px; height: 40px; color: var(--accent-purple); opacity: 0.7; margin: 0 auto 12px"></i>
+        <div style="font-size: 0.95rem; font-weight: 600; margin-bottom: 4px">Kliknij aby wybrać zdjęcie</div>
+        <div class="text-xs text-muted">lub przeciągnij i upuść plik (max 10MB)</div>
+        <input type="file" id="photo-file-input" accept="image/*" capture="environment" style="display:none">
+      </div>
+
+      <!-- Image preview -->
+      <div id="photo-preview-area" class="hidden mb-16" style="text-align:center">
+        <img id="photo-preview-img" style="max-width:100%; max-height:300px; border-radius:var(--radius-md); border:1px solid var(--border-glass)" alt="Podgląd zdjęcia">
+        <button class="btn btn--secondary btn--sm mt-12" id="photo-change-btn" style="margin:8px auto 0">
+          <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Zmień zdjęcie
+        </button>
+      </div>
+
+      <!-- Analyze button -->
+      <button class="btn btn--primary btn--full mb-16 hidden" id="photo-analyze-btn">
+        <i data-lucide="sparkles"></i>
+        <span>🤖 Analizuj z AI (Gemini)</span>
+      </button>
+
+      <!-- AI result area -->
+      <div id="photo-result-area"></div>
+
+      <!-- Save button -->
+      <button class="btn btn--primary btn--full mt-16 hidden" id="photo-save-btn">
+        <i data-lucide="check"></i>
+        <span>Zapisz posiłek</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== BARCODE SCANNER MODAL ========== -->
+  <div id="barcode-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal__handle"></div>
+      <div class="modal__header">
+        <h2 class="modal__title">🔍 Skaner kodów kreskowych</h2>
+        <button class="modal__close" id="barcode-modal-close">
+          <i data-lucide="x" style="width:18px; height:18px"></i>
+        </button>
+      </div>
+
+      <!-- Camera Preview for Barcode Scanning -->
+      <div id="barcode-scanner-container" class="hidden mb-16" style="position:relative; width:100%; height:200px; background:#000; border-radius:12px; overflow:hidden">
+        <video id="barcode-scanner-video" style="width:100%; height:100%; object-fit:cover" autoplay playsinline></video>
+        <div style="position:absolute; inset: 0; border:2px dashed var(--accent-blue); margin: 30px; border-radius:8px; pointer-events:none; box-shadow:0 0 100px rgba(0,0,0,0.6)"></div>
+      </div>
+      <button class="btn btn--secondary btn--full mb-16" id="btn-toggle-barcode-camera" style="border-color:rgba(61,139,255,0.3)">
+        <i data-lucide="camera" style="width:16px; height:16px; margin-right:6px; vertical-align:middle"></i>
+        <span id="barcode-camera-btn-text">Zeskanuj kod aparatem</span>
+      </button>
+
+      <div class="input-group mb-16">
+        <label for="barcode-input">Wpisz kod kreskowy ręcznie</label>
+        <div style="display:flex; gap:10px">
+          <input type="text" id="barcode-input" class="input" placeholder="np. 5900511100123" pattern="[0-9]*" inputmode="numeric">
+          <button class="btn btn--primary" id="btn-barcode-lookup" style="padding:14px 20px">Szukaj</button>
+        </div>
+      </div>
+
+      <!-- Result Card -->
+      <div id="barcode-result-card" class="hidden glass-card glass-card--no-hover mb-16" style="border: 1px solid var(--accent-blue); padding:16px">
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px">
+          <img id="barcode-prod-img" style="width:50px; height:50px; object-fit:contain; background:#fff; border-radius:8px; display:none">
+          <div>
+            <h4 id="barcode-prod-name" style="font-size:0.95rem; font-weight:800; color:var(--text-primary)">Nazwa produktu</h4>
+            <div id="barcode-prod-brand" class="text-xs text-muted">Marka</div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+          <div>
+            <span style="font-size:1.1rem; font-weight:800; color:var(--accent-green)" id="barcode-prod-kcal">0 kcal</span>
+            <span style="font-size:0.75rem; color:var(--text-secondary)">/ <span id="barcode-prod-portion">100g</span></span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-secondary)">
+            B: <strong style="color:var(--accent-blue)" id="barcode-prod-protein">0g</strong> | 
+            W: <strong style="color:var(--accent-orange)" id="barcode-prod-carbs">0g</strong> | 
+            T: <strong style="color:var(--accent-yellow)" id="barcode-prod-fat">0g</strong>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="barcode-prod-weight">Zjedzona ilość (w gramach lub ml)</label>
+          <div style="display:flex; gap:10px">
+            <input type="number" id="barcode-prod-weight" class="input" value="100" min="1" style="text-align:center">
+            <button class="btn btn--primary" id="btn-barcode-add-submit">Dodaj</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="barcode-status-area" class="text-center text-xs text-muted mb-16">
+        Wyszukuje produkty za pomocą darmowej bazy OpenFoodFacts.
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
-  <script src="js/storage.js?v=13"></script>
-  <script src="js/fooddb.js?v=13"></script>
-  <script src="js/ai.js?v=13"></script>
-  <script src="js/ui.js?v=13"></script>
-  <script src="js/app.js?v=13"></script>
+  <script src="js/storage.js?v=18"></script>
+  <script src="js/fooddb.js?v=18"></script>
+  <script src="js/camera.js?v=18"></script>
+  <script src="js/scanner.js?v=18"></script>
+  <script src="js/gamification.js?v=18"></script>
+  <script src="js/ai.js?v=18"></script>
+  <script src="js/ui.js?v=18"></script>
+  <script src="js/app.js?v=18"></script>
 </body>
 </html>
