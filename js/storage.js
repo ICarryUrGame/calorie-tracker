@@ -4,14 +4,10 @@
 // ============================================
 
 const AppStorage = (() => {
-  // If served on a local development server (like VS Code Live Server on 5500), but Python server runs on 3000
-  const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? (window.location.port === '3000' ? '' : 'http://localhost:3000')
-    : '';
+  const API_URL = 'https://calorie-tracker-xsqv.onrender.com';
   
-  // Detect if running on static GitHub Pages or locally via file://
-  const _isGitHubPages = window.location.hostname.includes('github.io');
-  const _isLocalMode = window.location.protocol === 'file://' || _isGitHubPages;
+  // Detect if running locally via file://
+  const _isLocalMode = window.location.protocol === 'file://';
 
   function _cleanProfile(p) {
     p = p || {};
