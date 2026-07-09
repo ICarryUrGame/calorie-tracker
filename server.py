@@ -62,6 +62,9 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Initialize database on startup/import for production Gunicorn servers
+init_db()
+
 # --- Password Hashing Helpers (PBKDF2 with unique salts) ---
 def hash_password(password, salt=None):
     if not salt:
